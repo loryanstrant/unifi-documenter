@@ -49,7 +49,7 @@ class UniFiClient:
         retry_strategy = Retry(
             total=3,
             status_forcelist=[429, 500, 502, 503, 504],
-            method_whitelist=["HEAD", "GET", "OPTIONS"],
+            allowed_methods=["HEAD", "GET", "OPTIONS"],
             backoff_factor=1
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
