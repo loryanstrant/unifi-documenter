@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  unifi-documenter:
+    image: ghcr.io/loryanstrant/unifi-documenter:latest
+    container_name: unifi-documenter-service
+    restart: unless-stopped
+    
+    environment:
+      # Controller connection
+      - UNIFI_CONTROLLER_IP=192.168.1.1
+      - UNIFI_API_KEY=your-api-key-here
+      
+      # Service configuration
+      - UNIFI_TIMEZONE=America/New_York
+      - UNIFI_SCHEDULE_TIME=02:00
+      - UNIFI_OUTPUT_FORMAT=markdown
+      
+      # Optional: Enable verbose logging
+      # - UNIFI_VERBOSE=true
+    
+    volumes:
+      # Output directory - documentation will be generated here
+      - ./unifi-docs:/output:rw
+      
+      # Optional: Mount custom configuration
+      # - ./config.yml:/app/config.yml:ro
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "python", "main.py", "--health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Security options
+    read_only: false
+    user: "1000:1000"  # Adjust to match your user/group
+    
+    # Optional: Network configuration
+    # networks:
+    #   - unifi-network
+
+# Optional: Custom network for isolation
+# networks:
+#   unifi-network:
+#     driver: bridge
+#     ipam:
+#       config:
+#         - subnet: 172.20.0.0/16

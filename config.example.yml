@@ -1,0 +1,28 @@
+unifi_controllers:
+  - name: main
+    host: 192.168.1.1
+    port: 443
+    verify_ssl: true
+    api_key: your-api-key-here
+  
+  - name: remote
+    host: 10.0.0.1
+    port: 8443
+    verify_ssl: false
+    username: admin
+    password: your-password
+
+unifi_timezone: America/New_York
+unifi_schedule_time: "02:00"
+unifi_output_dir: /output
+output_format: markdown
+
+# Feature toggles
+include_networks: true
+include_wifi_networks: true  
+include_devices: true
+include_clients: true
+include_firewall_rules: true
+include_nat_rules: true
+include_settings: true
+include_ip_addressing: true
