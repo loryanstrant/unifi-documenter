@@ -40,6 +40,9 @@ class Config:
         self.include_settings = True
         self.include_ip_addressing = True
         
+        # SSL verification (defaults to True for security)
+        self.unifi_verify_ssl = True
+        
         # Load from config file if provided
         if config_file:
             self._load_from_file(config_file)
@@ -114,6 +117,7 @@ class Config:
             'UNIFI_INCLUDE_NAT_RULES': 'include_nat_rules',
             'UNIFI_INCLUDE_SETTINGS': 'include_settings',
             'UNIFI_INCLUDE_IP_ADDRESSING': 'include_ip_addressing',
+            'UNIFI_VERIFY_SSL': 'unifi_verify_ssl',
         }
         
         for env_var, attr_name in bool_mappings.items():
@@ -131,7 +135,7 @@ class Config:
                 'name': 'default',
                 'host': self.unifi_controller_ip,
                 'port': 443,
-                'verify_ssl': True,
+                'verify_ssl': self.unifi_verify_ssl,
             }
             
             if self.unifi_api_key:
@@ -192,6 +196,7 @@ class Config:
             'include_nat_rules': self.include_nat_rules,
             'include_settings': self.include_settings,
             'include_ip_addressing': self.include_ip_addressing,
+            'unifi_verify_ssl': self.unifi_verify_ssl,
         }
     
     def save_to_file(self, file_path: str) -> None:

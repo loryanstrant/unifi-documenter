@@ -82,6 +82,7 @@ Environment Variables:
   UNIFI_API_KEY           - API key for authentication  
   UNIFI_USERNAME          - Username for authentication
   UNIFI_PASSWORD          - Password for authentication
+  UNIFI_VERIFY_SSL        - Verify SSL certificates (default: true)
   UNIFI_TIMEZONE          - Timezone for scheduling (default: UTC)
   UNIFI_SCHEDULE_TIME     - Daily run time (default: 02:00)
   UNIFI_OUTPUT_DIR        - Output directory (default: /output)
