@@ -82,6 +82,7 @@ Environment Variables:
   UNIFI_USERNAME          - Local admin username for authentication
   UNIFI_PASSWORD          - Password for authentication
   UNIFI_IS_UDM_PRO        - Set to true for UniFi OS based controllers (default: false)
+  UNIFI_API_VERSION       - UniFi API version (auto-detected if not specified)
   UNIFI_VERIFY_SSL        - Verify SSL certificates (default: true)
   UNIFI_TIMEZONE          - Timezone for scheduling (default: UTC)
   UNIFI_SCHEDULE_TIME     - Daily run time (default: 02:00)

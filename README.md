@@ -69,6 +69,7 @@ services:
 | `UNIFI_USERNAME` | Local admin username for authentication | - | Yes |
 | `UNIFI_PASSWORD` | Password for authentication | - | Yes |
 | `UNIFI_IS_UDM_PRO` | Set to true for UniFi OS based controllers | `false` | No |
+| `UNIFI_API_VERSION` | UniFi API version (auto-detected if not specified) | `auto` | No |
 | `UNIFI_VERIFY_SSL` | Verify SSL certificates | `true` | No |
 | `UNIFI_TIMEZONE` | Timezone for scheduling | `UTC` | No |
 | `UNIFI_SCHEDULE_TIME` | Daily run time (HH:MM) | `02:00` | No |
@@ -89,12 +90,14 @@ unifi_controllers:
     password: your_password
     is_udm_pro: false
     verify_ssl: true
+    api_version: v5  # Optional: specify API version (auto-detected if omitted)
   - name: remote
     controller_url: "https://remote.example.com:443"
     username: admin
     password: your_password
     is_udm_pro: true
     verify_ssl: false
+    api_version: unifiOS  # Optional: force specific API version for UDM Pro
 
 unifi_timezone: America/New_York
 unifi_schedule_time: "02:00"
@@ -219,6 +222,50 @@ You can control SSL certificate verification:
 # Custom CA bundle (mount the file and specify path)
 -v /path/to/ca-bundle.pem:/certs/ca-bundle.pem:ro
 -e UNIFI_VERIFY_SSL=/certs/ca-bundle.pem
+```
+
+### API Version Configuration
+
+The UniFi Documenter automatically detects the correct API version for your controller. However, you can override this behavior for specific situations:
+
+#### Automatic Detection (Recommended)
+
+By default, the application will try multiple API versions in this order:
+1. Specified version (if `UNIFI_API_VERSION` is set)
+2. `v5` (most common)
+3. `unifiOS` (for UDM Pro/SE controllers)
+4. `v4` (older controllers)
+5. `v6` (newer controllers)
+
+#### Manual Override
+
+```bash
+# Force a specific API version
+-e UNIFI_API_VERSION=unifiOS
+
+# For UDM Pro controllers having authentication issues
+-e UNIFI_API_VERSION=unifiOS
+-e UNIFI_IS_UDM_PRO=true
+
+# For older controllers
+-e UNIFI_API_VERSION=v4
+```
+
+#### Configuration File API Version
+
+```yaml
+unifi_controllers:
+  - name: legacy
+    controller_url: "https://old-unifi.example.com:8443"
+    username: admin
+    password: password
+    api_version: v4  # Force v4 for legacy controller
+  - name: udm-pro
+    controller_url: "https://udm.example.com"
+    username: admin
+    password: password
+    is_udm_pro: true
+    api_version: unifiOS  # Force unifiOS for UDM Pro
 ```
 
 ## Output Examples

@@ -30,7 +30,7 @@ class UniFiClient:
     """UniFi Controller API Client using pyunifi library"""
     
     def __init__(self, controller_url: str, username: str, password: str, 
-                 is_udm_pro: bool = False, verify_ssl: bool = True):
+                 is_udm_pro: bool = False, verify_ssl: bool = True, api_version: str = None):
         """
         Initialize UniFi client using pyunifi library
         
@@ -40,12 +40,14 @@ class UniFiClient:
             password: Password for authentication
             is_udm_pro: True if using UniFi OS based controller (UDM Pro, etc.)
             verify_ssl: SSL certificate verification (True/False or path to CA bundle)
+            api_version: UniFi API version to use (None for auto-detection)
         """
         self.controller_url = controller_url
         self.username = username
         self.password = password
         self.is_udm_pro = is_udm_pro
         self.verify_ssl = verify_ssl
+        self.api_version = api_version
         self.logger = logging.getLogger(__name__)
         
         # Parse the controller URL
@@ -60,36 +62,79 @@ class UniFiClient:
         
         self.controller = None
         self.authenticated = False
+        self.successful_api_version = None
         
-    def authenticate(self) -> bool:
-        """Authenticate with the UniFi controller using username/password"""
+    def _get_api_versions_to_try(self) -> List[str]:
+        """Get list of API versions to try in order of preference"""
+        versions = []
+        
+        # If specific version is configured, try it first
+        if self.api_version:
+            versions.append(self.api_version)
+            self.logger.info(f"Will try specified API version first: {self.api_version}")
+        
+        # Common API versions to try as fallback
+        fallback_versions = ['v5', 'unifiOS', 'v4', 'v6']
+        
+        # Add fallback versions that aren't already in the list
+        for version in fallback_versions:
+            if version not in versions:
+                versions.append(version)
+        
+        return versions
+    
+    def _try_authenticate_with_version(self, version: str) -> bool:
+        """Try to authenticate with a specific API version"""
         try:
-            self.logger.info(f"Connecting to UniFi controller at {self.host}:{self.port}")
+            self.logger.info(f"Attempting authentication with API version: {version}")
             
-            # Create pyunifi Controller instance
-            self.controller = Controller(
+            # Create pyunifi Controller instance with specific version
+            controller = Controller(
                 host=self.host,
                 username=self.username,
                 password=self.password,
                 port=self.port,
-                version='v5',  # Use v5 API
+                version=version,
                 site_id='default',
                 ssl_verify=self.verify_ssl
             )
             
             # Test authentication by getting sites
-            sites = self.controller.get_sites()
-            self.authenticated = True
-            self.logger.info(f"Successfully authenticated to {self.host} as {self.username}")
+            sites = controller.get_sites()
+            
+            # If we get here, authentication was successful
+            self.controller = controller
+            self.successful_api_version = version
+            self.logger.info(f"Successfully authenticated using API version: {version}")
             self.logger.info(f"Found {len(sites)} sites")
             return True
             
         except APIError as e:
-            self.logger.error(f"UniFi API error during authentication: {e}")
+            self.logger.debug(f"Authentication failed with API version {version}: {e}")
             return False
         except Exception as e:
-            self.logger.error(f"Authentication error: {e}")
+            self.logger.debug(f"Authentication error with API version {version}: {e}")
             return False
+    
+    def authenticate(self) -> bool:
+        """Authenticate with the UniFi controller using username/password with automatic API version detection"""
+        self.logger.info(f"Connecting to UniFi controller at {self.host}:{self.port}")
+        
+        versions_to_try = self._get_api_versions_to_try()
+        self.logger.info(f"Will attempt authentication with API versions: {', '.join(versions_to_try)}")
+        
+        for version in versions_to_try:
+            if self._try_authenticate_with_version(version):
+                self.authenticated = True
+                self.logger.info(f"Successfully authenticated to {self.host} as {self.username} using API version {self.successful_api_version}")
+                return True
+        
+        # If we get here, all versions failed
+        self.logger.error(f"Authentication failed with all attempted API versions: {', '.join(versions_to_try)}")
+        self.logger.error("Please check your credentials and controller configuration.")
+        if self.is_udm_pro:
+            self.logger.error("For UDM Pro controllers, ensure UNIFI_IS_UDM_PRO=true is set.")
+        return False
     
     def get_sites(self) -> List[Dict[str, Any]]:
         """Get list of sites"""

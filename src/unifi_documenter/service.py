@@ -268,7 +268,8 @@ class ServiceHealthChecker:
                     username=controller_config['username'],
                     password=controller_config['password'],
                     is_udm_pro=controller_config.get('is_udm_pro', False),
-                    verify_ssl=controller_config.get('verify_ssl', True)
+                    verify_ssl=controller_config.get('verify_ssl', True),
+                    api_version=controller_config.get('api_version')
                 )
                 
                 # Attempt authentication (only username/password supported)
