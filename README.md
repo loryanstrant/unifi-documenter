@@ -23,17 +23,19 @@ A comprehensive Docker container solution that automatically generates documenta
 ### Using Docker Run
 
 ```bash
-# Basic usage with API key
+# Basic usage with username/password
 docker run --rm -v $(pwd)/output:/output \
-  -e UNIFI_CONTROLLER_IP=192.168.1.1 \
-  -e UNIFI_API_KEY=your-api-key \
+  -e UNIFI_CONTROLLER_URL=https://unifi.example.com:8443 \
+  -e UNIFI_USERNAME=your_local_admin_user \
+  -e UNIFI_PASSWORD=your_password \
   ghcr.io/loryanstrant/unifi-documenter:latest --run-once
 
-# Using username/password
+# For UDM Pro controllers (port 443)
 docker run --rm -v $(pwd)/output:/output \
-  -e UNIFI_CONTROLLER_IP=192.168.1.1 \
-  -e UNIFI_USERNAME=admin \
-  -e UNIFI_PASSWORD=your-password \
+  -e UNIFI_CONTROLLER_URL=https://unifi.example.com:443 \
+  -e UNIFI_USERNAME=your_local_admin_user \
+  -e UNIFI_PASSWORD=your_password \
+  -e UNIFI_IS_UDM_PRO=true \
   ghcr.io/loryanstrant/unifi-documenter:latest --run-once
 ```
 
@@ -47,8 +49,10 @@ services:
     container_name: unifi-documenter
     restart: unless-stopped
     environment:
-      - UNIFI_CONTROLLER_IP=192.168.1.1
-      - UNIFI_API_KEY=your-api-key
+      - UNIFI_CONTROLLER_URL=https://unifi.example.com:8443
+      - UNIFI_USERNAME=your_local_admin_user
+      - UNIFI_PASSWORD=your_password
+      - UNIFI_IS_UDM_PRO=false
       - UNIFI_TIMEZONE=America/New_York
       - UNIFI_SCHEDULE_TIME=02:00
     volumes:
@@ -61,17 +65,16 @@ services:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `UNIFI_CONTROLLER_IP` | IP address of UniFi controller | - | Yes* |
-| `UNIFI_API_KEY` | API key for authentication | - | Yes* |
-| `UNIFI_USERNAME` | Username for authentication | - | Yes* |
-| `UNIFI_PASSWORD` | Password for authentication | - | Yes* |
+| `UNIFI_CONTROLLER_URL` | Full URL of UniFi controller (e.g., https://unifi.example.com:8443) | - | Yes |
+| `UNIFI_USERNAME` | Local admin username for authentication | - | Yes |
+| `UNIFI_PASSWORD` | Password for authentication | - | Yes |
+| `UNIFI_IS_UDM_PRO` | Set to true for UniFi OS based controllers | `false` | No |
+| `UNIFI_VERIFY_SSL` | Verify SSL certificates | `true` | No |
 | `UNIFI_TIMEZONE` | Timezone for scheduling | `UTC` | No |
 | `UNIFI_SCHEDULE_TIME` | Daily run time (HH:MM) | `02:00` | No |
 | `UNIFI_OUTPUT_DIR` | Output directory | `/output` | No |
 | `UNIFI_OUTPUT_FORMAT` | Output format (`markdown` or `json`) | `markdown` | No |
 | `UNIFI_VERBOSE` | Enable verbose logging | `false` | No |
-
-*Either API key OR username/password required
 
 ### Advanced Configuration
 
@@ -81,12 +84,16 @@ For multiple controllers or advanced settings, use a configuration file:
 # config.yml
 unifi_controllers:
   - name: main
-    host: 192.168.1.1
-    api_key: your-api-key
+    controller_url: "https://unifi.example.com:8443"
+    username: your_local_admin_user
+    password: your_password
+    is_udm_pro: false
+    verify_ssl: true
   - name: remote
-    host: 10.0.0.1
+    controller_url: "https://remote.example.com:443"
     username: admin
-    password: password
+    password: your_password
+    is_udm_pro: true
     verify_ssl: false
 
 unifi_timezone: America/New_York
@@ -174,23 +181,44 @@ docker run ghcr.io/loryanstrant/unifi-documenter:latest --verbose
 docker run ghcr.io/loryanstrant/unifi-documenter:latest --help
 ```
 
-## Authentication Methods
+## Authentication
 
-### API Key (Recommended)
+The UniFi documenter uses the established `pyunifi` library for connecting to UniFi Controllers. It supports username and password authentication only.
 
-1. In UniFi Network Controller, go to **Settings** → **Admins**
-2. Create a new admin or edit existing
-3. Enable **Hotspot Manager** role (minimum required)
-4. Generate an API key in the admin settings
-5. Use the API key in your configuration
+### Username/Password Authentication
 
-### Username/Password
-
-Traditional username and password authentication is also supported:
+Standard authentication using a local UniFi admin account:
 
 ```bash
-docker run -e UNIFI_USERNAME=admin -e UNIFI_PASSWORD=your-password \
+docker run -e UNIFI_CONTROLLER_URL=https://unifi.example.com:8443 \
+  -e UNIFI_USERNAME=admin \
+  -e UNIFI_PASSWORD=your-password \
   ghcr.io/loryanstrant/unifi-documenter:latest
+```
+
+### UDM Pro Configuration
+
+For UniFi OS based controllers (UDM Pro, UDM SE, etc.), set the `is_udm_pro` parameter:
+
+```bash
+docker run -e UNIFI_CONTROLLER_URL=https://unifi.example.com:443 \
+  -e UNIFI_USERNAME=admin \
+  -e UNIFI_PASSWORD=your-password \
+  -e UNIFI_IS_UDM_PRO=true \
+  ghcr.io/loryanstrant/unifi-documenter:latest
+```
+
+### SSL Certificate Configuration
+
+You can control SSL certificate verification:
+
+```bash
+# Disable SSL verification (self-signed certificates)
+-e UNIFI_VERIFY_SSL=false
+
+# Custom CA bundle (mount the file and specify path)
+-v /path/to/ca-bundle.pem:/certs/ca-bundle.pem:ro
+-e UNIFI_VERIFY_SSL=/certs/ca-bundle.pem
 ```
 
 ## Output Examples
@@ -271,7 +299,8 @@ docker run ghcr.io/loryanstrant/unifi-documenter:latest --health
 **Authentication Failed**
 ```bash
 # Test connectivity
-docker run -e UNIFI_CONTROLLER_IP=192.168.1.1 -e UNIFI_API_KEY=test \
+docker run -e UNIFI_CONTROLLER_URL=https://unifi.example.com:8443 \
+  -e UNIFI_USERNAME=admin -e UNIFI_PASSWORD=test \
   ghcr.io/loryanstrant/unifi-documenter:latest --check-connectivity
 ```
 
@@ -280,9 +309,10 @@ docker run -e UNIFI_CONTROLLER_IP=192.168.1.1 -e UNIFI_API_KEY=test \
 # Disable SSL verification in config
 unifi_controllers:
   - name: main
-    host: 192.168.1.1
+    controller_url: "https://unifi.example.com:8443"
+    username: admin
+    password: your_password
     verify_ssl: false
-    api_key: your-key
 ```
 
 ### Debug Mode
@@ -330,6 +360,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Built with the UniFi Network Controller API
-- Inspired by similar documentation tools
+- Built with the [pyunifi](https://github.com/finish06/pyunifi) library for UniFi Controller API access
+- Follows the TNWare UniFi Controller API documentation configuration format
 - Thanks to the UniFi community for API documentation and examples
