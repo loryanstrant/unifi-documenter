@@ -65,6 +65,7 @@ services:
 | `UNIFI_API_KEY` | API key for authentication | - | Yes* |
 | `UNIFI_USERNAME` | Username for authentication | - | Yes* |
 | `UNIFI_PASSWORD` | Password for authentication | - | Yes* |
+| `UNIFI_VERIFY_SSL` | Enable/disable SSL certificate verification | `true` | No |
 | `UNIFI_TIMEZONE` | Timezone for scheduling | `UTC` | No |
 | `UNIFI_SCHEDULE_TIME` | Daily run time (HH:MM) | `02:00` | No |
 | `UNIFI_OUTPUT_DIR` | Output directory | `/output` | No |
@@ -277,12 +278,19 @@ docker run -e UNIFI_CONTROLLER_IP=192.168.1.1 -e UNIFI_API_KEY=test \
 
 **SSL Certificate Issues**
 ```yaml
-# Disable SSL verification in config
+# Option 1: Using config.yml
 unifi_controllers:
   - name: main
     host: 192.168.1.1
     verify_ssl: false
     api_key: your-key
+```
+
+```bash
+# Option 2: Using environment variable
+docker run -e UNIFI_VERIFY_SSL=false -e UNIFI_CONTROLLER_IP=192.168.1.1 \
+  -e UNIFI_API_KEY=your-key \
+  ghcr.io/loryanstrant/unifi-documenter:latest --run-once
 ```
 
 ### Debug Mode

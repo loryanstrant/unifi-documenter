@@ -15,6 +15,9 @@ services:
       # - UNIFI_USERNAME=admin
       # - UNIFI_PASSWORD=your-password
       
+      # SSL certificate verification (set to false for self-signed certificates)
+      # - UNIFI_VERIFY_SSL=false
+      
       # Service configuration
       - UNIFI_TIMEZONE=America/New_York
       - UNIFI_SCHEDULE_TIME=02:00
