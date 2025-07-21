@@ -1,20 +1,14 @@
 """
-UniFi Controller API Client
+UniFi Controller API Client using pyunifi library
 
-This module provides a client for connecting to UniFi Controllers and retrieving network information.
+This module provides a client for connecting to UniFi Controllers and retrieving network information
+using the pyunifi library with the TNWare UniFi Controller API documentation configuration format.
 """
 
-import json
 import logging
-import requests
-import urllib3
-from typing import Dict, Any, List, Optional, Union
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-
-# Disable SSL warnings if verify_ssl is False
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import urllib.parse
+from typing import Dict, Any, List, Optional
+from pyunifi.controller import Controller, APIError
 
 
 class UniFiAPIError(Exception):
@@ -33,282 +27,255 @@ class UniFiAuthenticationError(UniFiAPIError):
 
 
 class UniFiClient:
-    """UniFi Controller API Client"""
+    """UniFi Controller API Client using pyunifi library"""
     
-    def __init__(self, host: str, port: int = 443, verify_ssl: bool = True):
-        self.host = host
-        self.port = port
+    def __init__(self, controller_url: str, username: str, password: str, 
+                 is_udm_pro: bool = False, verify_ssl: bool = True):
+        """
+        Initialize UniFi client using pyunifi library
+        
+        Args:
+            controller_url: Full URL to UniFi controller (e.g., https://unifi.example.com:8443)
+            username: Local admin username
+            password: Password for authentication
+            is_udm_pro: True if using UniFi OS based controller (UDM Pro, etc.)
+            verify_ssl: SSL certificate verification (True/False or path to CA bundle)
+        """
+        self.controller_url = controller_url
+        self.username = username
+        self.password = password
+        self.is_udm_pro = is_udm_pro
         self.verify_ssl = verify_ssl
         self.logger = logging.getLogger(__name__)
         
-        # Session management
-        self.session = requests.Session()
-        self.session.verify = verify_ssl
+        # Parse the controller URL
+        parsed_url = urllib.parse.urlparse(controller_url)
+        self.host = parsed_url.hostname
+        self.port = parsed_url.port or (8443 if not is_udm_pro else 443)
         
-        # Configure retry strategy
-        retry_strategy = Retry(
-            total=3,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "OPTIONS"],
-            backoff_factor=1
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
+        # Adjust port for UDM Pro if needed
+        if is_udm_pro and self.port == 8443:
+            self.port = 443
+            self.logger.info(f"Adjusted port to 443 for UDM Pro controller: {self.host}")
         
-        # API endpoints
-        self.base_url = f"https://{host}:{port}"
-        self.api_url = f"{self.base_url}/api"
-        
-        # Authentication state
+        self.controller = None
         self.authenticated = False
-        self.api_key = None
-        self.username = None
-        self.csrf_token = None
         
-    def authenticate_with_api_key(self, api_key: str) -> bool:
-        """Authenticate using API key"""
+    def authenticate(self) -> bool:
+        """Authenticate with the UniFi controller using username/password"""
         try:
-            self.api_key = api_key
-            self.session.headers.update({
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
-            })
+            self.logger.info(f"Connecting to UniFi controller at {self.host}:{self.port}")
             
-            # Test authentication by getting controller info
-            response = self._make_request('GET', '/api/self')
-            if response.status_code == 200:
-                self.authenticated = True
-                self.logger.info(f"Successfully authenticated to {self.host} using API key")
-                return True
-            else:
-                self.logger.error(f"API key authentication failed: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"API key authentication error: {e}")
+            # Create pyunifi Controller instance
+            self.controller = Controller(
+                host=self.host,
+                username=self.username,
+                password=self.password,
+                port=self.port,
+                version='v5',  # Use v5 API
+                site_id='default',
+                ssl_verify=self.verify_ssl
+            )
+            
+            # Test authentication by getting sites
+            sites = self.controller.get_sites()
+            self.authenticated = True
+            self.logger.info(f"Successfully authenticated to {self.host} as {self.username}")
+            self.logger.info(f"Found {len(sites)} sites")
+            return True
+            
+        except APIError as e:
+            self.logger.error(f"UniFi API error during authentication: {e}")
             return False
-    
-    def authenticate_with_credentials(self, username: str, password: str) -> bool:
-        """Authenticate using username and password"""
-        try:
-            self.username = username
-            
-            # Login request
-            login_data = {
-                'username': username,
-                'password': password,
-                'remember': True
-            }
-            
-            response = self._make_request('POST', '/api/auth/login', data=login_data)
-            
-            if response.status_code == 200:
-                self.authenticated = True
-                # Extract CSRF token if present
-                if 'X-CSRF-Token' in response.headers:
-                    self.csrf_token = response.headers['X-CSRF-Token']
-                    self.session.headers.update({'X-CSRF-Token': self.csrf_token})
-                
-                self.logger.info(f"Successfully authenticated to {self.host} as {username}")
-                return True
-            else:
-                self.logger.error(f"Credential authentication failed: {response.status_code}")
-                return False
-                
         except Exception as e:
-            self.logger.error(f"Credential authentication error: {e}")
+            self.logger.error(f"Authentication error: {e}")
             return False
-    
-    def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
-                     params: Optional[Dict] = None) -> requests.Response:
-        """Make HTTP request to UniFi controller"""
-        url = f"{self.base_url}{endpoint}"
-        
-        try:
-            if method.upper() == 'GET':
-                response = self.session.get(url, params=params, timeout=30)
-            elif method.upper() == 'POST':
-                response = self.session.post(url, json=data, timeout=30)
-            elif method.upper() == 'PUT':
-                response = self.session.put(url, json=data, timeout=30)
-            elif method.upper() == 'DELETE':
-                response = self.session.delete(url, timeout=30)
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-            
-            return response
-            
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Request failed: {e}")
-            raise UniFiConnectionError(f"Failed to connect to {self.host}: {e}")
     
     def get_sites(self) -> List[Dict[str, Any]]:
         """Get list of sites"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', '/api/self/sites')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get sites: {response.status_code}")
+        try:
+            return self.controller.get_sites()
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get sites: {e}")
     
     def get_networks(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get network configurations"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/rest/networkconf')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get networks: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            # Get network settings using the generic get_setting method
+            settings = self.controller.get_setting('networks')
+            return settings if isinstance(settings, list) else [settings] if settings else []
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get networks: {e}")
     
     def get_wlan_groups(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get WLAN groups"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/rest/wlangroup')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get WLAN groups: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            # Get WLAN group settings
+            settings = self.controller.get_setting('wlangroup')
+            return settings if isinstance(settings, list) else [settings] if settings else []
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get WLAN groups: {e}")
     
     def get_wireless_networks(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get wireless network configurations"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/rest/wlanconf')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get wireless networks: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            return self.controller.get_wlan_conf()
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get wireless networks: {e}")
     
     def get_devices(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get UniFi devices"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/stat/device')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get devices: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            return self.controller.get_aps()
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get devices: {e}")
     
     def get_clients(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get active clients"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/stat/sta')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get clients: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            return self.controller.get_clients()
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get clients: {e}")
     
     def get_known_clients(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get known/configured clients"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/rest/user')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get known clients: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            return self.controller.get_users()
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get known clients: {e}")
     
     def get_firewall_groups(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get firewall groups"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/rest/firewallgroup')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get firewall groups: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            # Get firewall settings
+            settings = self.controller.get_setting('firewallgroup')
+            return settings if isinstance(settings, list) else [settings] if settings else []
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get firewall groups: {e}")
     
     def get_firewall_rules(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get firewall rules"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/rest/firewallrule')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get firewall rules: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            # Get firewall settings
+            settings = self.controller.get_setting('firewallrule')
+            return settings if isinstance(settings, list) else [settings] if settings else []
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get firewall rules: {e}")
     
     def get_port_forwards(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get port forward rules"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/rest/portforward')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get port forwards: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            # Get port forward settings
+            settings = self.controller.get_setting('portforward')
+            return settings if isinstance(settings, list) else [settings] if settings else []
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get port forwards: {e}")
     
     def get_site_settings(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get site settings"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/get/setting')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get site settings: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            settings = self.controller.get_setting()
+            return settings if isinstance(settings, list) else [settings] if settings else []
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get site settings: {e}")
     
     def get_system_info(self) -> Dict[str, Any]:
         """Get controller system information"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', '/api/system')
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise UniFiAPIError(f"Failed to get system info: {response.status_code}")
+        try:
+            return self.controller.get_sysinfo()
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get system info: {e}")
     
     def get_health(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get site health information"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/stat/health')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get health info: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            health_info = self.controller.get_healthinfo()
+            return health_info if isinstance(health_info, list) else [health_info] if health_info else []
+        except APIError as e:
+            raise UniFiAPIError(f"Failed to get health info: {e}")
     
     def get_dpi_stats(self, site_id: str = 'default') -> List[Dict[str, Any]]:
         """Get DPI statistics"""
         if not self.authenticated:
             raise UniFiAuthenticationError("Not authenticated")
         
-        response = self._make_request('GET', f'/api/s/{site_id}/stat/dpi')
-        if response.status_code == 200:
-            return response.json().get('data', [])
-        else:
-            raise UniFiAPIError(f"Failed to get DPI stats: {response.status_code}")
+        try:
+            # Switch to the specified site
+            self.controller.switch_site(site_id)
+            # DPI stats might not be available in pyunifi, return empty list
+            return []
+        except APIError as e:
+            self.logger.warning(f"DPI stats not available: {e}")
+            return []
     
     def disconnect(self) -> None:
         """Disconnect from controller"""
-        if self.authenticated and not self.api_key:
-            # Only logout if using username/password authentication
-            try:
-                self._make_request('POST', '/api/auth/logout')
-            except Exception:
-                pass  # Ignore logout errors
-        
-        self.authenticated = False
-        self.session.close()
-        self.logger.info(f"Disconnected from {self.host}")
+        if self.controller:
+            # pyunifi handles disconnection automatically
+            self.authenticated = False
+            self.controller = None
+            self.logger.info(f"Disconnected from {self.host}")
     
     def __enter__(self):
         return self

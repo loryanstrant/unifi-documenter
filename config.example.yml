@@ -1,16 +1,17 @@
 unifi_controllers:
   - name: main
-    host: 192.168.1.1
-    port: 443
+    controller_url: "https://unifi.example.com:8443"
+    username: your_local_admin_user
+    password: your_password
+    is_udm_pro: false
     verify_ssl: true
-    api_key: your-api-key-here
   
   - name: remote
-    host: 10.0.0.1
-    port: 8443
-    verify_ssl: false
+    controller_url: "https://remote.example.com:443"
     username: admin
-    password: your-password
+    password: your_password
+    is_udm_pro: true
+    verify_ssl: false
 
 unifi_timezone: America/New_York
 unifi_schedule_time: "02:00"

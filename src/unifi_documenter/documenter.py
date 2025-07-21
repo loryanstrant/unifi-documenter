@@ -57,23 +57,23 @@ class UniFiDocumenter:
             return False, str(e)
     
     def _connect_to_controller(self, controller_config: Dict[str, Any]) -> UniFiClient:
-        """Connect to UniFi controller"""
-        host = controller_config['host']
-        port = controller_config.get('port', 443)
+        """Connect to UniFi controller using pyunifi library"""
+        controller_url = controller_config['controller_url']
+        username = controller_config['username']
+        password = controller_config['password']
+        is_udm_pro = controller_config.get('is_udm_pro', False)
         verify_ssl = controller_config.get('verify_ssl', True)
         
-        client = UniFiClient(host, port, verify_ssl)
+        client = UniFiClient(
+            controller_url=controller_url,
+            username=username,
+            password=password,
+            is_udm_pro=is_udm_pro,
+            verify_ssl=verify_ssl
+        )
         
-        # Authenticate
-        if controller_config.get('api_key'):
-            success = client.authenticate_with_api_key(controller_config['api_key'])
-        elif controller_config.get('username') and controller_config.get('password'):
-            success = client.authenticate_with_credentials(
-                controller_config['username'], 
-                controller_config['password']
-            )
-        else:
-            raise UniFiAuthenticationError("No valid authentication method provided")
+        # Authenticate (only username/password supported)
+        success = client.authenticate()
         
         if not success:
             raise UniFiAuthenticationError("Authentication failed")
