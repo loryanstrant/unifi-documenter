@@ -8,8 +8,13 @@ services:
     
     environment:
       # Controller connection
-      - UNIFI_CONTROLLER_IP=192.168.1.1
-      - UNIFI_API_KEY=your-api-key-here
+      - UNIFI_CONTROLLER_URL=https://unifi.example.com:8443
+      - UNIFI_USERNAME=your_local_admin_user
+      - UNIFI_PASSWORD=your_password
+      
+      # Controller configuration options
+      - UNIFI_IS_UDM_PRO=false
+      - UNIFI_VERIFY_SSL=true
       
       # Service configuration
       - UNIFI_TIMEZONE=America/New_York

@@ -78,10 +78,10 @@ Examples:
   python main.py --verbose
 
 Environment Variables:
-  UNIFI_CONTROLLER_IP      - IP address of UniFi controller
-  UNIFI_API_KEY           - API key for authentication  
-  UNIFI_USERNAME          - Username for authentication
+  UNIFI_CONTROLLER_URL     - Full URL of UniFi controller (e.g., https://unifi.example.com:8443)
+  UNIFI_USERNAME          - Local admin username for authentication
   UNIFI_PASSWORD          - Password for authentication
+  UNIFI_IS_UDM_PRO        - Set to true for UniFi OS based controllers (default: false)
   UNIFI_VERIFY_SSL        - Verify SSL certificates (default: true)
   UNIFI_TIMEZONE          - Timezone for scheduling (default: UTC)
   UNIFI_SCHEDULE_TIME     - Daily run time (default: 02:00)

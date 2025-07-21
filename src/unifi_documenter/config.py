@@ -23,10 +23,10 @@ class Config:
         self.unifi_output_dir = '/output'
         
         # Legacy single-controller support (for backward compatibility)
-        self.unifi_controller_ip = None
-        self.unifi_api_key = None
+        self.unifi_controller_url = None
         self.unifi_username = None
         self.unifi_password = None
+        self.unifi_is_udm_pro = False
         self.output_file = 'unifi-docs.md'
         self.output_format = 'markdown'
         
@@ -94,8 +94,7 @@ class Config:
         
         # Legacy environment variables (for backward compatibility)
         env_mappings = {
-            'UNIFI_CONTROLLER_IP': 'unifi_controller_ip',
-            'UNIFI_API_KEY': 'unifi_api_key',
+            'UNIFI_CONTROLLER_URL': 'unifi_controller_url',
             'UNIFI_USERNAME': 'unifi_username',
             'UNIFI_PASSWORD': 'unifi_password',
             'UNIFI_OUTPUT_FILE': 'output_file',
@@ -118,6 +117,7 @@ class Config:
             'UNIFI_INCLUDE_SETTINGS': 'include_settings',
             'UNIFI_INCLUDE_IP_ADDRESSING': 'include_ip_addressing',
             'UNIFI_VERIFY_SSL': 'unifi_verify_ssl',
+            'UNIFI_IS_UDM_PRO': 'unifi_is_udm_pro',
         }
         
         for env_var, attr_name in bool_mappings.items():
@@ -130,17 +130,20 @@ class Config:
     
     def _convert_legacy_config(self) -> None:
         """Convert legacy single-controller configuration to multi-controller format"""
-        if not self.unifi_controllers and self.unifi_controller_ip:
+        if not self.unifi_controllers and self.unifi_controller_url:
+            # Parse the controller URL to extract host and port
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self.unifi_controller_url)
+            
             controller_config = {
                 'name': 'default',
-                'host': self.unifi_controller_ip,
-                'port': 443,
+                'controller_url': self.unifi_controller_url,
                 'verify_ssl': self.unifi_verify_ssl,
+                'is_udm_pro': self.unifi_is_udm_pro,
             }
             
-            if self.unifi_api_key:
-                controller_config['api_key'] = self.unifi_api_key
-            elif self.unifi_username:
+            # Only support username/password authentication (no API key)
+            if self.unifi_username:
                 controller_config['username'] = self.unifi_username
                 if self.unifi_password:
                     controller_config['password'] = self.unifi_password
@@ -158,16 +161,15 @@ class Config:
     
     def validate_controller_config(self, controller_config: Dict[str, Any]) -> bool:
         """Validate a single controller configuration"""
-        if not controller_config.get('host'):
-            self.logger.error(f"Controller configuration missing 'host': {controller_config}")
+        if not controller_config.get('controller_url'):
+            self.logger.error(f"Controller configuration missing 'controller_url': {controller_config}")
             return False
         
-        # Check for authentication method
-        has_api_key = controller_config.get('api_key')
+        # Check for authentication method - only username/password supported
         has_credentials = controller_config.get('username') and controller_config.get('password')
         
-        if not has_api_key and not has_credentials:
-            self.logger.error(f"Controller configuration missing authentication: {controller_config}")
+        if not has_credentials:
+            self.logger.error(f"Controller configuration missing username/password authentication: {controller_config}")
             return False
         
         return True
@@ -185,7 +187,7 @@ class Config:
             'unifi_timezone': self.unifi_timezone,
             'unifi_schedule_time': self.unifi_schedule_time,
             'unifi_output_dir': self.unifi_output_dir,
-            'unifi_controller_ip': self.unifi_controller_ip,
+            'unifi_controller_url': self.unifi_controller_url,
             'output_file': self.output_file,
             'output_format': self.output_format,
             'include_networks': self.include_networks,
@@ -197,6 +199,7 @@ class Config:
             'include_settings': self.include_settings,
             'include_ip_addressing': self.include_ip_addressing,
             'unifi_verify_ssl': self.unifi_verify_ssl,
+            'unifi_is_udm_pro': self.unifi_is_udm_pro,
         }
     
     def save_to_file(self, file_path: str) -> None:
@@ -208,7 +211,6 @@ class Config:
         sanitized_data = config_data.copy()
         if 'unifi_controllers' in sanitized_data:
             for controller in sanitized_data['unifi_controllers']:
-                controller.pop('api_key', None)
                 controller.pop('password', None)
         
         try:

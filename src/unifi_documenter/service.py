@@ -248,11 +248,11 @@ class ServiceHealthChecker:
         
         for controller_config in self.config.get_controllers():
             controller_name = controller_config.get('name', 'default')
-            host = controller_config.get('host', 'unknown')
+            controller_url = controller_config.get('controller_url', 'unknown')
             
             controller_connectivity = {
                 'name': controller_name,
-                'host': host,
+                'host': controller_url,
                 'status': 'unknown',
                 'response_time': None,
                 'error': None
@@ -264,22 +264,15 @@ class ServiceHealthChecker:
                 
                 start_time = time.time()
                 client = UniFiClient(
-                    host=host,
-                    port=controller_config.get('port', 443),
+                    controller_url=controller_url,
+                    username=controller_config['username'],
+                    password=controller_config['password'],
+                    is_udm_pro=controller_config.get('is_udm_pro', False),
                     verify_ssl=controller_config.get('verify_ssl', True)
                 )
                 
-                # Attempt authentication
-                if controller_config.get('api_key'):
-                    success = client.authenticate_with_api_key(controller_config['api_key'])
-                elif controller_config.get('username') and controller_config.get('password'):
-                    success = client.authenticate_with_credentials(
-                        controller_config['username'], 
-                        controller_config['password']
-                    )
-                else:
-                    success = False
-                    controller_connectivity['error'] = "No authentication method configured"
+                # Attempt authentication (only username/password supported)
+                success = client.authenticate()
                 
                 response_time = time.time() - start_time
                 controller_connectivity['response_time'] = round(response_time * 1000, 2)  # ms
@@ -290,8 +283,7 @@ class ServiceHealthChecker:
                 else:
                     controller_connectivity['status'] = 'auth_failed'
                     connectivity_info['summary']['unreachable'] += 1
-                    if not controller_connectivity['error']:
-                        controller_connectivity['error'] = "Authentication failed"
+                    controller_connectivity['error'] = "Authentication failed"
                 
                 client.disconnect()
                 
