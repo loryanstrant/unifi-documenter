@@ -14,7 +14,8 @@
       "username": "admin",
       "password": "your_password",
       "is_udm_pro": true,
-      "verify_ssl": false
+      "verify_ssl": false,
+      "api_version": "unifiOS"
     }
   ],
   "unifi_timezone": "America/New_York",
