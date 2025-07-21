@@ -69,7 +69,8 @@ class UniFiDocumenter:
             username=username,
             password=password,
             is_udm_pro=is_udm_pro,
-            verify_ssl=verify_ssl
+            verify_ssl=verify_ssl,
+            api_version=controller_config.get('api_version')
         )
         
         # Authenticate (only username/password supported)

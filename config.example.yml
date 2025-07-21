@@ -5,6 +5,7 @@ unifi_controllers:
     password: your_password
     is_udm_pro: false
     verify_ssl: true
+    # api_version: v5  # Optional: specify API version (auto-detected if omitted)
   
   - name: remote
     controller_url: "https://remote.example.com:443"
@@ -12,6 +13,7 @@ unifi_controllers:
     password: your_password
     is_udm_pro: true
     verify_ssl: false
+    api_version: unifiOS  # Optional: force specific API version for UDM Pro
 
 unifi_timezone: America/New_York
 unifi_schedule_time: "02:00"

@@ -43,6 +43,9 @@ class Config:
         # SSL verification (defaults to True for security)
         self.unifi_verify_ssl = True
         
+        # API version (defaults to None for auto-detection)
+        self.unifi_api_version = None
+        
         # Load from config file if provided
         if config_file:
             self._load_from_file(config_file)
@@ -99,6 +102,7 @@ class Config:
             'UNIFI_PASSWORD': 'unifi_password',
             'UNIFI_OUTPUT_FILE': 'output_file',
             'UNIFI_OUTPUT_FORMAT': 'output_format',
+            'UNIFI_API_VERSION': 'unifi_api_version',
         }
         
         for env_var, attr_name in env_mappings.items():
@@ -141,6 +145,10 @@ class Config:
                 'verify_ssl': self.unifi_verify_ssl,
                 'is_udm_pro': self.unifi_is_udm_pro,
             }
+            
+            # Add API version if specified
+            if self.unifi_api_version:
+                controller_config['api_version'] = self.unifi_api_version
             
             # Only support username/password authentication (no API key)
             if self.unifi_username:
@@ -200,6 +208,7 @@ class Config:
             'include_ip_addressing': self.include_ip_addressing,
             'unifi_verify_ssl': self.unifi_verify_ssl,
             'unifi_is_udm_pro': self.unifi_is_udm_pro,
+            'unifi_api_version': self.unifi_api_version,
         }
     
     def save_to_file(self, file_path: str) -> None:
