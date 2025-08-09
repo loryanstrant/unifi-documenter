@@ -1,0 +1,35 @@
+# Core SSH and network connectivity
+paramiko>=3.4.0
+
+# JSON processing and data handling
+ujson>=5.8.0
+
+# Cryptography for backup decryption
+cryptography>=41.0.0
+
+# Archive handling for backup files
+py7zr>=0.21.0
+
+# Environment and configuration
+python-dotenv>=1.0.0
+
+# Logging and monitoring
+structlog>=23.2.0
+
+# Date and time handling
+python-dateutil>=2.8.2
+
+# HTTP requests for API calls
+requests>=2.31.0
+
+# Scheduling and cron
+croniter>=2.0.1
+
+# File system utilities
+pathlib2>=2.3.7
+
+# YAML configuration support
+PyYAML>=6.0.1
+
+# Health check and monitoring
+psutil>=5.9.6

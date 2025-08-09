@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  unifi-backup:
+    image: ghcr.io/loryanstrant/unifi-documenter:latest
+    container_name: unifi-backup
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      # Required: Unifi controller connection
+      UNIFI_HOST: "192.168.1.1"                    # IP address of your Unifi controller
+      UNIFI_USERNAME: "root"                       # SSH username for controller access
+      UNIFI_PASSWORD: "your-password-here"         # SSH password for controller access
+      UNIFI_PORT: "22"                            # SSH port (default: 22)
+      
+      # Backup scheduling
+      BACKUP_SCHEDULE: "daily"                     # Options: daily, weekly, or cron:expression
+      BACKUP_TIME: "02:00"                        # Time to run backup (HH:MM format)
+      BACKUP_RETENTION_DAYS: "30"                 # Number of days to retain backups
+      
+      # Container settings
+      TZ: "America/New_York"                      # Timezone for scheduling
+      LOG_LEVEL: "INFO"                           # Logging level: DEBUG, INFO, WARN, ERROR
+      HEALTH_CHECK_PORT: "8080"                   # Port for health checks
+      
+      # Advanced settings (optional)
+      MAX_RETRIES: "3"                            # Maximum retry attempts
+      RETRY_DELAY: "60"                           # Delay between retries (seconds)
+      CONNECTION_TIMEOUT: "30"                    # SSH connection timeout (seconds)
+    
+    # Volume mounts
+    volumes:
+      - ./backups:/app/backups                    # Local backup storage directory
+      # Optional: Custom configuration
+      # - ./config:/app/config
+    
+    # Network configuration
+    ports:
+      - "8080:8080"                               # Health check endpoint
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Security
+    user: "1000:1000"                             # Run as non-root user
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+# Alternative configuration for multiple controllers
+  unifi-backup-main:
+    image: ghcr.io/loryanstrant/unifi-documenter:latest
+    container_name: unifi-backup-main
+    restart: unless-stopped
+    environment:
+      UNIFI_HOST: "192.168.1.1"
+      UNIFI_USERNAME: "root"
+      UNIFI_PASSWORD: "password1"
+      BACKUP_SCHEDULE: "daily"
+      BACKUP_TIME: "02:00"
+      TZ: "America/New_York"
+      BACKUP_DIRECTORY: "/app/backups/main"
+    volumes:
+      - ./backups/main:/app/backups/main
+    ports:
+      - "8081:8080"
+
+  unifi-backup-remote:
+    image: ghcr.io/loryanstrant/unifi-documenter:latest
+    container_name: unifi-backup-remote
+    restart: unless-stopped
+    environment:
+      UNIFI_HOST: "192.168.2.1"
+      UNIFI_USERNAME: "root"
+      UNIFI_PASSWORD: "password2"
+      BACKUP_SCHEDULE: "weekly"
+      BACKUP_TIME: "03:00"
+      TZ: "America/New_York"
+      BACKUP_DIRECTORY: "/app/backups/remote"
+    volumes:
+      - ./backups/remote:/app/backups/remote
+    ports:
+      - "8082:8080"
+
+# Monitoring and logging (optional)
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_POLL_INTERVAL: 86400             # Check for updates daily
+      WATCHTOWER_CLEANUP: "true"
+    command: unifi-backup
+
+# Networks (optional)
+networks:
+  default:
+    driver: bridge
