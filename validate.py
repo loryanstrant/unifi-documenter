@@ -63,3 +63,8 @@ def test_scheduler_functionality():
             schedule_info = scheduler.get_schedule_info()
             assert 'cron_expression' in schedule_info
             assert schedule_info['schedule_type'] == 'daily'
+            print("✅ Scheduler functionality test passed")
+            return True
+    except Exception as e:
+        print(f"❌ Scheduler functionality test failed: {e}")
+        return False
