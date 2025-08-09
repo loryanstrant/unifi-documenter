@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  unifi-documenter:
+    image: ghcr.io/loryanstrant/unifi-documenter:latest
+    container_name: unifi-documenter
+    restart: unless-stopped
+    
+    environment:
+      # UniFi Controller Connection (Required)
+      UNIFI_HOST: "192.168.1.1"                    # IP address of your UniFi controller
+      UNIFI_SSH_USER: "root"                       # SSH username (usually 'root' for UDM)
+      UNIFI_SSH_PASSWORD: "your-ssh-password"      # SSH password (or use SSH key below)
+      # UNIFI_SSH_KEY: |                           # Alternative: SSH private key
+      #   -----BEGIN OPENSSH PRIVATE KEY-----
+      #   your-private-key-content-here
+      #   -----END OPENSSH PRIVATE KEY-----
+      UNIFI_SSH_PORT: "22"                         # SSH port (default: 22)
+      
+      # Backup Configuration (Optional)
+      UNIFI_BACKUP_PASSWORD: ""                    # Backup encryption password (if set)
+      BACKUP_SCHEDULE: "0 2 * * *"                 # Cron schedule (default: daily at 2 AM)
+      BACKUP_RETENTION_DAYS: "30"                  # Days to keep old backups (default: 30)
+      
+      # System Configuration (Optional)
+      TZ: "America/New_York"                       # Timezone for scheduling
+      RUN_ONCE: "false"                            # Set to "true" for one-time backup
+      
+    volumes:
+      # Backup storage (Required)
+      - ./unifi-backups:/backups
+      
+      # SSH key file (Alternative to password auth)
+      # - ./ssh-keys/id_rsa:/root/.ssh/id_rsa:ro
+      
+      # Logs (Optional)
+      - ./logs:/app/logs
+    
+    # Uncomment for debugging
+    # ports:
+    #   - "8080:8080"
+    
+    # Security context
+    user: "1000:1000"
+    
+    # Resource limits (Optional)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# Optional: Network configuration
+networks:
+  default:
+    name: unifi-documenter-network
