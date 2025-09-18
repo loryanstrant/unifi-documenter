@@ -1,5 +1,9 @@
 # UniFi Documenter
 
+[![Docker Build](https://github.com/loryanstrant/unifi-documenter/actions/workflows/docker-build.yml/badge.svg)](https://github.com/loryanstrant/unifi-documenter/actions/workflows/docker-build.yml)
+[![Docker Pulls](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/loryanstrant/unifi-documenter/pkgs/container/unifi-documenter)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 An intelligent Docker-based solution for automatically backing up, analyzing, and documenting UniFi Dream Machine configurations using AI. This tool creates human-readable and RAG-optimized markdown documentation from UniFi backup files.
 
 ## Features
@@ -17,7 +21,7 @@ An intelligent Docker-based solution for automatically backing up, analyzing, an
 ### 1. Clone and Configure
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/loryanstrant/unifi-documenter.git
 cd unifi-documenter
 
 # Copy and edit environment configuration
