@@ -1,0 +1,31 @@
+name: UniFi Documenter
+description: AI-powered UniFi configuration documentation generator
+
+features:
+  - title: "🤖 AI-Powered Analysis"
+    description: "Converts raw UniFi backup data into human-readable documentation using OpenAI, Azure OpenAI, Ollama, or custom AI providers"
+  
+  - title: "⏰ Flexible Scheduling"
+    description: "Daily, weekly, or monthly automated processing with timezone support"
+  
+  - title: "📚 RAG-Optimized Output"
+    description: "Structured markdown with metadata, perfect for retrieval-augmented generation systems"
+  
+  - title: "🐳 Docker Ready"
+    description: "Complete containerized solution with health checks and monitoring"
+  
+  - title: "🔐 Secure Processing"
+    description: "SSH-based backup retrieval with encrypted file processing"
+  
+  - title: "🌍 Multi-Platform"
+    description: "Supports AMD64 and ARM64 architectures"
+
+topics:
+  - unifi
+  - documentation
+  - ai
+  - docker
+  - networking
+  - automation
+  - markdown
+  - rag
