@@ -1,0 +1,317 @@
+"""
+AI integration module for analyzing UniFi backup data
+"""
+import json
+import logging
+import requests
+from typing import Dict, List, Optional, Union
+from abc import ABC, abstractmethod
+
+from .config import Config
+
+logger = logging.getLogger('unifi_documenter')
+
+class AIProvider(ABC):
+    """Abstract base class for AI providers"""
+    
+    @abstractmethod
+    def generate_completion(self, prompt: str, max_tokens: int = 4000) -> Optional[str]:
+        """Generate a completion from the AI provider"""
+        pass
+    
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if the AI provider is available"""
+        pass
+
+class OpenAIProvider(AIProvider):
+    """OpenAI API provider"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.api_key = config.AI_API_KEY
+        self.api_url = config.AI_API_URL
+        self.model = config.AI_MODEL
+        
+        # Import openai here to avoid issues if not installed
+        try:
+            import openai
+            self.client = openai.OpenAI(
+                api_key=self.api_key,
+                base_url=self.api_url
+            )
+        except ImportError:
+            logger.error("OpenAI package not installed")
+            self.client = None
+    
+    def generate_completion(self, prompt: str, max_tokens: int = 4000) -> Optional[str]:
+        """Generate completion using OpenAI API"""
+        if not self.client:
+            return None
+            
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert network administrator and documentation specialist. Analyze the provided UniFi configuration data and create clear, comprehensive documentation."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=max_tokens,
+                temperature=0.1
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"OpenAI API error: {str(e)}")
+            return None
+    
+    def is_available(self) -> bool:
+        """Check if OpenAI provider is available"""
+        return self.client is not None and bool(self.api_key)
+
+class AzureOpenAIProvider(AIProvider):
+    """Azure OpenAI provider"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.api_key = config.AI_API_KEY
+        self.endpoint = config.AZURE_OPENAI_ENDPOINT
+        self.deployment = config.AZURE_OPENAI_DEPLOYMENT
+        self.api_version = config.AZURE_OPENAI_API_VERSION
+        
+        try:
+            import openai
+            self.client = openai.AzureOpenAI(
+                api_key=self.api_key,
+                api_version=self.api_version,
+                azure_endpoint=self.endpoint
+            )
+        except ImportError:
+            logger.error("OpenAI package not installed")
+            self.client = None
+    
+    def generate_completion(self, prompt: str, max_tokens: int = 4000) -> Optional[str]:
+        """Generate completion using Azure OpenAI API"""
+        if not self.client:
+            return None
+            
+        try:
+            response = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[
+                    {"role": "system", "content": "You are an expert network administrator and documentation specialist. Analyze the provided UniFi configuration data and create clear, comprehensive documentation."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=max_tokens,
+                temperature=0.1
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"Azure OpenAI API error: {str(e)}")
+            return None
+    
+    def is_available(self) -> bool:
+        """Check if Azure OpenAI provider is available"""
+        return self.client is not None and all([self.api_key, self.endpoint, self.deployment])
+
+class OllamaProvider(AIProvider):
+    """Ollama local AI provider"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.url = config.OLLAMA_URL
+        self.model = config.OLLAMA_MODEL
+    
+    def generate_completion(self, prompt: str, max_tokens: int = 4000) -> Optional[str]:
+        """Generate completion using Ollama API"""
+        try:
+            response = requests.post(
+                f"{self.url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": f"You are an expert network administrator and documentation specialist. Analyze the provided UniFi configuration data and create clear, comprehensive documentation.\n\nUser: {prompt}",
+                    "stream": False,
+                    "options": {
+                        "num_predict": max_tokens,
+                        "temperature": 0.1
+                    }
+                },
+                timeout=300  # 5 minute timeout for generation
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get('response', '')
+            else:
+                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Ollama API error: {str(e)}")
+            return None
+    
+    def is_available(self) -> bool:
+        """Check if Ollama provider is available"""
+        try:
+            response = requests.get(f"{self.url}/api/tags", timeout=10)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+class CustomProvider(AIProvider):
+    """Custom AI provider for other OpenAI-compatible APIs"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.api_key = config.AI_API_KEY
+        self.api_url = config.AI_API_URL
+        self.model = config.AI_MODEL
+    
+    def generate_completion(self, prompt: str, max_tokens: int = 4000) -> Optional[str]:
+        """Generate completion using custom OpenAI-compatible API"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": "You are an expert network administrator and documentation specialist. Analyze the provided UniFi configuration data and create clear, comprehensive documentation."},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": max_tokens,
+                "temperature": 0.1
+            }
+            
+            response = requests.post(
+                f"{self.api_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=300
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result['choices'][0]['message']['content']
+            else:
+                logger.error(f"Custom API error: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Custom API error: {str(e)}")
+            return None
+    
+    def is_available(self) -> bool:
+        """Check if custom provider is available"""
+        return bool(self.api_key and self.api_url)
+
+class AIManager:
+    """Manages AI providers and handles AI-related operations"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.provider = self._create_provider()
+    
+    def _create_provider(self) -> Optional[AIProvider]:
+        """Create the appropriate AI provider based on configuration"""
+        provider_type = self.config.AI_PROVIDER.lower()
+        
+        providers = {
+            'openai': OpenAIProvider,
+            'azure-openai': AzureOpenAIProvider,
+            'ollama': OllamaProvider,
+            'custom': CustomProvider
+        }
+        
+        provider_class = providers.get(provider_type)
+        if not provider_class:
+            logger.error(f"Unknown AI provider: {provider_type}")
+            return None
+        
+        provider = provider_class(self.config)
+        
+        if not provider.is_available():
+            logger.error(f"AI provider {provider_type} is not available")
+            return None
+        
+        logger.info(f"Initialized AI provider: {provider_type}")
+        return provider
+    
+    def is_available(self) -> bool:
+        """Check if AI manager is ready to use"""
+        return self.provider is not None and self.provider.is_available()
+    
+    def generate_documentation(self, data: Union[str, Dict], context: str = "") -> Optional[str]:
+        """Generate documentation for the provided data"""
+        if not self.is_available():
+            logger.error("AI provider not available")
+            return None
+        
+        try:
+            # Convert data to string if it's a dict
+            if isinstance(data, dict):
+                data_str = json.dumps(data, indent=2)
+            else:
+                data_str = str(data)
+            
+            # Limit data size to prevent token overflow
+            max_data_size = min(len(data_str), 30000)  # Limit to ~30k characters
+            if len(data_str) > max_data_size:
+                data_str = data_str[:max_data_size] + "\n... (truncated)"
+                logger.warning(f"Data truncated to {max_data_size} characters")
+            
+            prompt = self._create_documentation_prompt(data_str, context)
+            return self.provider.generate_completion(prompt, max_tokens=4000)
+            
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {str(e)}")
+            return None
+    
+    def _create_documentation_prompt(self, data: str, context: str) -> str:
+        """Create a comprehensive prompt for documentation generation"""
+        return f"""
+Please analyze the following UniFi configuration data and create comprehensive markdown documentation. 
+The documentation should be suitable for both human readers and RAG (Retrieval-Augmented Generation) systems.
+
+Context: {context if context else "General UniFi configuration analysis"}
+
+Requirements:
+1. Create clear, structured markdown with appropriate headers
+2. Explain the purpose and function of each configuration element
+3. Include security implications where relevant
+4. Use tables for structured data when appropriate
+5. Add troubleshooting tips if applicable
+6. Make it searchable with good keywords and descriptions
+7. Focus on practical information that would be useful for network administration
+
+Configuration Data:
+```json
+{data}
+```
+
+Please provide the analysis in markdown format:
+"""
+
+    def analyze_configuration_type(self, data: Dict) -> str:
+        """Analyze what type of UniFi configuration this data represents"""
+        if not self.is_available():
+            return "Unknown"
+        
+        try:
+            prompt = f"""
+Analyze this UniFi configuration data and identify what type of configuration it represents.
+Respond with just the category name (e.g., "Access Point", "Network Settings", "Security Policy", "User Management", etc.)
+
+Data: {json.dumps(data, indent=2)[:1000]}
+"""
+            result = self.provider.generate_completion(prompt, max_tokens=50)
+            return result.strip() if result else "Unknown"
+            
+        except Exception as e:
+            logger.error(f"Configuration type analysis failed: {str(e)}")
+            return "Unknown"

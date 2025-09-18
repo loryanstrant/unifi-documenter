@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  unifi-documenter:
+    # Use pre-built image (recommended)
+    image: ghcr.io/loryanstrant/unifi-documenter:latest
+    
+    # OR build locally (comment out 'image' line above and uncomment below)
+    # build: .
+    
+    container_name: unifi-documenter
+    restart: unless-stopped
+    environment:
+      # Schedule Configuration
+      - SCHEDULE_FREQUENCY=daily  # daily, weekly, monthly
+      - SCHEDULE_TIME=02:00       # HH:MM format (24-hour)
+      - SCHEDULE_DAY=1            # For weekly (1=Monday, 7=Sunday), for monthly (1-31)
+      - TIMEZONE=UTC              # Timezone for scheduling
+      
+      # UDM Configuration
+      - UDM_IP=192.168.1.1
+      - UDM_ROOT_PASSWORD=your_password_here
+      - REMOTE_BACKUP_DIR=/usr/lib/unifi/data/backup/autobackup
+      
+      # AI Configuration
+      - AI_PROVIDER=openai        # openai, ollama, azure-openai, custom
+      - AI_API_URL=https://api.openai.com/v1
+      - AI_API_KEY=your_openai_api_key_here
+      - AI_MODEL=gpt-4o-mini
+      
+      # Optional Ollama Configuration (if AI_PROVIDER=ollama)
+      # - OLLAMA_URL=http://host.docker.internal:11434
+      # - OLLAMA_MODEL=llama3
+      
+      # Optional Azure OpenAI Configuration (if AI_PROVIDER=azure-openai)
+      # - AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+      # - AZURE_OPENAI_API_VERSION=2024-02-01
+      # - AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+      
+      # Output Configuration
+      - OUTPUT_FORMAT=markdown    # markdown, json, both
+      - MAX_DOCUMENT_SIZE=50000   # Maximum characters per document chunk
+      - INCLUDE_RAW_DATA=false    # Include raw JSON in output
+      
+    volumes:
+      - ./output:/app/output
+      - ./config:/app/config:ro
+    networks:
+      - unifi-net
+
+networks:
+  unifi-net:
+    driver: bridge
