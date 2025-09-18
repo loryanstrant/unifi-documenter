@@ -4,7 +4,7 @@ Scheduler for UniFi Documenter
 import schedule
 import time
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, time as dt_time
 import pytz
 from typing import Callable, Optional
 from .config import Config
@@ -20,6 +20,31 @@ class UniFiScheduler:
         self.tz = pytz.timezone(config.TIMEZONE)
         self.is_running = False
         
+    def _convert_time_to_utc(self, time_str: str) -> str:
+        """Convert time string from configured timezone to UTC"""
+        try:
+            # Parse the time string (HH:MM format)
+            hour, minute = map(int, time_str.split(':'))
+            
+            # Create a datetime for today at the specified time in the configured timezone
+            today = date.today()
+            target_time = dt_time(hour, minute)
+            
+            # Create a timezone-aware datetime
+            local_dt = datetime.combine(today, target_time)
+            localized_dt = self.tz.localize(local_dt)
+            
+            # Convert to UTC
+            utc_dt = localized_dt.astimezone(pytz.UTC)
+            
+            # Return as HH:MM string
+            return f"{utc_dt.hour:02d}:{utc_dt.minute:02d}"
+            
+        except Exception as e:
+            logger.error(f"Failed to convert time {time_str} to UTC: {str(e)}")
+            # Fallback to original time if conversion fails
+            return time_str
+        
     def setup_schedule(self) -> bool:
         """Setup the schedule based on configuration"""
         try:
@@ -29,10 +54,14 @@ class UniFiScheduler:
             frequency = self.config.SCHEDULE_FREQUENCY.lower()
             time_str = self.config.SCHEDULE_TIME
             
+            # Convert the configured time from target timezone to UTC for the schedule library
+            utc_time_str = self._convert_time_to_utc(time_str)
+            
             logger.info(f"Setting up {frequency} schedule at {time_str} ({self.config.TIMEZONE})")
+            logger.info(f"Converted to UTC time: {utc_time_str} for scheduling")
             
             if frequency == 'daily':
-                schedule.every().day.at(time_str).do(self._run_task_with_timezone)
+                schedule.every().day.at(utc_time_str).do(self._run_task_with_timezone)
                 
             elif frequency == 'weekly':
                 day_mapping = {
@@ -47,13 +76,13 @@ class UniFiScheduler:
                 
                 day_scheduler = day_mapping.get(self.config.SCHEDULE_DAY)
                 if day_scheduler:
-                    day_scheduler.at(time_str).do(self._run_task_with_timezone)
+                    day_scheduler.at(utc_time_str).do(self._run_task_with_timezone)
                 else:
                     raise ValueError(f"Invalid day for weekly schedule: {self.config.SCHEDULE_DAY}")
                     
             elif frequency == 'monthly':
                 # For monthly, we'll check daily but only run on the specified day
-                schedule.every().day.at(time_str).do(self._run_monthly_task)
+                schedule.every().day.at(utc_time_str).do(self._run_monthly_task)
                 
             else:
                 raise ValueError(f"Invalid schedule frequency: {frequency}")
