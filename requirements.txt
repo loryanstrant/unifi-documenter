@@ -1,6 +1,6 @@
 requests==2.32.4
 openai==1.51.0
-paramiko==3.4.0
+paramiko==4.0.0
 cryptography==44.0.1
 schedule==1.2.0
 pytz==2023.3
