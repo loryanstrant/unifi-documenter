@@ -8,10 +8,12 @@ RUN apt-get update && apt-get install -y \
     unzip \
     gzip \
     jq \
-    mongodb-clients \
     curl \
     gosu \
     && rm -rf /var/lib/apt/lists/*
+
+# Install bsondump via pip since mongodb-database-tools may not be available
+RUN pip install --no-cache-dir pymongo
 
 # Set working directory
 WORKDIR /app

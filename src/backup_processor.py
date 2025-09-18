@@ -191,17 +191,56 @@ class UniFiBackupProcessor:
     def convert_bson_to_json(self, bson_file: str, json_file: str) -> bool:
         """Convert BSON database file to JSON"""
         try:
-            # Use bsondump to convert BSON to JSON
-            cmd = ['bsondump', bson_file]
+            # Use Python's bson module to convert BSON to JSON
+            import bson
             
-            with open(json_file, 'w') as output_file:
-                result = subprocess.run(cmd, stdout=output_file, stderr=subprocess.PIPE, text=True)
+            documents = []
+            with open(bson_file, 'rb') as f:
+                # Read the entire BSON file
+                bson_data = f.read()
+                
+                # Parse BSON documents
+                offset = 0
+                while offset < len(bson_data):
+                    try:
+                        # Get document size (first 4 bytes, little-endian)
+                        if offset + 4 > len(bson_data):
+                            break
+                            
+                        doc_size = int.from_bytes(bson_data[offset:offset+4], byteorder='little')
+                        if doc_size <= 0 or offset + doc_size > len(bson_data):
+                            break
+                            
+                        # Extract document
+                        doc_bytes = bson_data[offset:offset+doc_size]
+                        
+                        # Decode BSON document
+                        try:
+                            doc = bson.decode(doc_bytes)
+                            documents.append(doc)
+                        except Exception as e:
+                            logger.warning(f"Failed to decode BSON document at offset {offset}: {str(e)}")
+                        
+                        offset += doc_size
+                        
+                    except Exception as e:
+                        logger.warning(f"Error processing BSON at offset {offset}: {str(e)}")
+                        break
             
-            if result.returncode != 0:
-                logger.error(f"bsondump failed: {result.stderr}")
-                return False
+            # Write JSON documents
+            with open(json_file, 'w') as f:
+                for doc in documents:
+                    import json
+                    # Convert ObjectId and other BSON types to strings
+                    def convert_bson_types(obj):
+                        if hasattr(obj, '__dict__'):
+                            return str(obj)
+                        return obj
+                    
+                    json_doc = json.dumps(doc, default=convert_bson_types, separators=(',', ':'))
+                    f.write(json_doc + '\n')
             
-            logger.info(f"BSON converted to JSON: {json_file}")
+            logger.info(f"BSON converted to JSON: {json_file} ({len(documents)} documents)")
             return True
             
         except Exception as e:
