@@ -100,8 +100,11 @@ class UniFiScheduler:
         logger.info(f"Running scheduled task at {local_time}")
         
         try:
-            self.task_function()
-            logger.info("Scheduled task completed successfully")
+            result = self.task_function()
+            if result:
+                logger.info("Scheduled task completed successfully")
+            else:
+                logger.error("Scheduled task failed")
         except Exception as e:
             logger.error(f"Scheduled task failed: {str(e)}")
     
