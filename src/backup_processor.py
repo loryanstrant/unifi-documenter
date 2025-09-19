@@ -40,31 +40,36 @@ class UniFiBackupProcessor:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
-            # Try multiple authentication methods to handle different UDM configurations
-            # First try keyboard-interactive, then password authentication
+            # UDM typically requires keyboard-interactive authentication
+            # Try keyboard-interactive first, then fallback to password auth
             try:
-                # Attempt keyboard-interactive authentication first
-                self.ssh_client.connect(
-                    hostname=self.config.UDM_IP,
-                    username='root',
-                    password=self.config.UDM_ROOT_PASSWORD,
-                    timeout=30,
-                    look_for_keys=False,
-                    allow_agent=False,
-                    auth_timeout=30
-                )
-                logger.info(f"Successfully connected to UDM at {self.config.UDM_IP}")
+                # Try keyboard-interactive authentication first
+                self._connect_with_keyboard_interactive()
+                logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using keyboard-interactive authentication")
                 return True
-            except paramiko.AuthenticationException as auth_e:
-                logger.warning(f"Standard authentication failed: {str(auth_e)}")
-                # Try keyboard-interactive authentication manually
+            except Exception as ki_e:
+                logger.warning(f"Keyboard-interactive authentication failed: {str(ki_e)}")
+                
+                # Fallback to standard password authentication
                 try:
-                    self._connect_with_keyboard_interactive()
-                    logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using keyboard-interactive")
+                    self.ssh_client.close()
+                    self.ssh_client = paramiko.SSHClient()
+                    self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    
+                    self.ssh_client.connect(
+                        hostname=self.config.UDM_IP,
+                        username='root',
+                        password=self.config.UDM_ROOT_PASSWORD,
+                        timeout=30,
+                        look_for_keys=False,
+                        allow_agent=False,
+                        auth_timeout=30
+                    )
+                    logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using password authentication")
                     return True
-                except Exception as ki_e:
-                    logger.error(f"Keyboard-interactive authentication also failed: {str(ki_e)}")
-                    raise auth_e
+                except paramiko.AuthenticationException as auth_e:
+                    logger.error(f"Password authentication also failed: {str(auth_e)}")
+                    raise ki_e  # Raise the original keyboard-interactive error
             
         except Exception as e:
             logger.error(f"Failed to connect to UDM: {str(e)}")
@@ -75,33 +80,52 @@ class UniFiBackupProcessor:
         import socket
         
         # Create a new client for keyboard-interactive auth
-        self.ssh_client.close()
+        if self.ssh_client:
+            self.ssh_client.close()
         self.ssh_client = paramiko.SSHClient()
         self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
         # Create transport manually to handle keyboard-interactive
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(30)
-        sock.connect((self.config.UDM_IP, 22))
         
-        transport = paramiko.Transport(sock)
-        transport.start_client()
-        
-        # Try keyboard-interactive authentication
-        def auth_handler(title, instructions, prompt_list):
-            """Handle keyboard-interactive prompts"""
-            responses = []
-            for prompt, echo in prompt_list:
-                if 'password' in prompt.lower():
-                    responses.append(self.config.UDM_ROOT_PASSWORD)
-                else:
-                    responses.append('')
-            return responses
-        
-        transport.auth_interactive('root', auth_handler)
-        
-        # Create channel and set it on the client
-        self.ssh_client._transport = transport
+        try:
+            sock.connect((self.config.UDM_IP, 22))
+            
+            transport = paramiko.Transport(sock)
+            transport.start_client()
+            
+            # Try keyboard-interactive authentication
+            def auth_handler(title, instructions, prompt_list):
+                """Handle keyboard-interactive prompts"""
+                responses = []
+                for prompt, echo in prompt_list:
+                    # Look for password prompts (case insensitive)
+                    prompt_lower = prompt.lower()
+                    if 'password' in prompt_lower or 'passwd' in prompt_lower:
+                        responses.append(self.config.UDM_ROOT_PASSWORD)
+                    else:
+                        # For unknown prompts, try empty response or password
+                        responses.append(self.config.UDM_ROOT_PASSWORD)
+                return responses
+            
+            # Attempt keyboard-interactive authentication
+            transport.auth_interactive('root', auth_handler)
+            
+            # Verify authentication was successful
+            if not transport.is_authenticated():
+                raise paramiko.AuthenticationException("Authentication failed")
+            
+            # Set the transport on the client
+            self.ssh_client._transport = transport
+            
+        except Exception as e:
+            # Clean up socket if connection failed
+            try:
+                sock.close()
+            except:
+                pass
+            raise e
     
     @log_execution_time
     def get_latest_backup_file(self) -> Optional[str]:
