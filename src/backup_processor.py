@@ -14,8 +14,13 @@ from typing import Dict, List, Optional, Tuple
 import paramiko
 import logging
 
-from .utils import log_execution_time
-from .config import Config
+# Handle relative imports for when module is run standalone
+try:
+    from .utils import log_execution_time
+    from .config import Config
+except ImportError:
+    from utils import log_execution_time
+    from config import Config
 
 logger = logging.getLogger('unifi_documenter')
 
@@ -36,66 +41,98 @@ class UniFiBackupProcessor:
     @log_execution_time
     def connect_to_udm(self) -> bool:
         """Establish SSH connection to UDM"""
+        auth_methods_tried = []
+        
         try:
-            self.ssh_client = paramiko.SSHClient()
-            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            # UDM typically requires keyboard-interactive authentication
-            # Try keyboard-interactive first, then fallback to password auth
+            # First, try standard password authentication (simplest)
             try:
-                # Try keyboard-interactive authentication first
-                self._connect_with_keyboard_interactive()
-                logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using keyboard-interactive authentication")
-                return True
-            except Exception as ki_e:
-                logger.warning(f"Keyboard-interactive authentication failed: {str(ki_e)}")
+                logger.info("Attempting password authentication...")
+                self.ssh_client = paramiko.SSHClient()
+                self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
-                # Fallback to standard password authentication
+                self.ssh_client.connect(
+                    hostname=self.config.UDM_IP,
+                    username='root',
+                    password=self.config.UDM_ROOT_PASSWORD,
+                    timeout=10,  # Reduced timeout for faster testing
+                    look_for_keys=False,
+                    allow_agent=False,
+                    auth_timeout=10
+                )
+                logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using password authentication")
+                return True
+                
+            except paramiko.AuthenticationException as pwd_e:
+                auth_methods_tried.append(f"password: {str(pwd_e)}")
+                logger.warning(f"Password authentication failed: {str(pwd_e)}")
+                
+                # If password auth failed, try keyboard-interactive
                 try:
-                    self.ssh_client.close()
-                    self.ssh_client = paramiko.SSHClient()
-                    self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    
-                    self.ssh_client.connect(
-                        hostname=self.config.UDM_IP,
-                        username='root',
-                        password=self.config.UDM_ROOT_PASSWORD,
-                        timeout=30,
-                        look_for_keys=False,
-                        allow_agent=False,
-                        auth_timeout=30
-                    )
-                    logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using password authentication")
+                    logger.info("Attempting keyboard-interactive authentication...")
+                    self._connect_with_keyboard_interactive()
+                    logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using keyboard-interactive authentication")
                     return True
-                except paramiko.AuthenticationException as auth_e:
-                    logger.error(f"Password authentication also failed: {str(auth_e)}")
-                    raise ki_e  # Raise the original keyboard-interactive error
+                    
+                except Exception as ki_e:
+                    auth_methods_tried.append(f"keyboard-interactive: {str(ki_e)}")
+                    logger.warning(f"Keyboard-interactive authentication failed: {str(ki_e)}")
+                    
+                    # Log all attempted methods for debugging
+                    logger.error(f"All authentication methods failed. Attempted: {'; '.join(auth_methods_tried)}")
+                    return False
             
         except Exception as e:
             logger.error(f"Failed to connect to UDM: {str(e)}")
+            if auth_methods_tried:
+                logger.error(f"Authentication methods tried: {'; '.join(auth_methods_tried)}")
             return False
     
     def _connect_with_keyboard_interactive(self):
         """Helper method to handle keyboard-interactive authentication"""
-        import socket
-        
         # Create a new client for keyboard-interactive auth
         if self.ssh_client:
             self.ssh_client.close()
         self.ssh_client = paramiko.SSHClient()
         self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
-        # Create transport manually to handle keyboard-interactive
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(30)
+        try:
+            # First try: Standard connect which might negotiate keyboard-interactive
+            self.ssh_client.connect(
+                hostname=self.config.UDM_IP,
+                username='root',
+                password=self.config.UDM_ROOT_PASSWORD,
+                timeout=10,  # Shorter timeout for faster failure
+                auth_timeout=10,
+                look_for_keys=False,
+                allow_agent=False
+            )
+            
+        except paramiko.AuthenticationException as e:
+            # If that fails, try manual keyboard-interactive
+            logger.debug(f"Standard connect failed, trying manual keyboard-interactive: {e}")
+            self._manual_keyboard_interactive()
+    
+    def _manual_keyboard_interactive(self):
+        """Fallback method for manual keyboard-interactive authentication"""
+        import socket
+        
+        # Close existing client if any
+        if self.ssh_client:
+            self.ssh_client.close()
+        
+        sock = None
+        transport = None
         
         try:
+            # Create socket and transport with shorter timeouts
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)  # Shorter timeout
             sock.connect((self.config.UDM_IP, 22))
             
             transport = paramiko.Transport(sock)
-            transport.start_client()
+            transport.start_client(timeout=10)  # Add timeout to start_client
             
-            # Try keyboard-interactive authentication
+            # Define authentication handler
             def auth_handler(title, instructions, prompt_list):
                 """Handle keyboard-interactive prompts"""
                 responses = []
@@ -105,7 +142,7 @@ class UniFiBackupProcessor:
                     if 'password' in prompt_lower or 'passwd' in prompt_lower:
                         responses.append(self.config.UDM_ROOT_PASSWORD)
                     else:
-                        # For unknown prompts, try empty response or password
+                        # For unknown prompts, try password
                         responses.append(self.config.UDM_ROOT_PASSWORD)
                 return responses
             
@@ -114,17 +151,25 @@ class UniFiBackupProcessor:
             
             # Verify authentication was successful
             if not transport.is_authenticated():
-                raise paramiko.AuthenticationException("Authentication failed")
+                raise paramiko.AuthenticationException("Manual keyboard-interactive authentication failed")
             
-            # Set the transport on the client
+            # Create new SSH client and properly attach transport
+            self.ssh_client = paramiko.SSHClient()
+            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             self.ssh_client._transport = transport
             
         except Exception as e:
-            # Clean up socket if connection failed
-            try:
-                sock.close()
-            except:
-                pass
+            # Clean up resources on failure
+            if transport:
+                try:
+                    transport.close()
+                except:
+                    pass
+            elif sock and hasattr(sock, 'fileno') and sock.fileno() != -1:
+                try:
+                    sock.close()
+                except:
+                    pass
             raise e
     
     @log_execution_time
