@@ -40,19 +40,68 @@ class UniFiBackupProcessor:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
-            self.ssh_client.connect(
-                hostname=self.config.UDM_IP,
-                username='root',
-                password=self.config.UDM_ROOT_PASSWORD,
-                timeout=30
-            )
-            
-            logger.info(f"Successfully connected to UDM at {self.config.UDM_IP}")
-            return True
+            # Try multiple authentication methods to handle different UDM configurations
+            # First try keyboard-interactive, then password authentication
+            try:
+                # Attempt keyboard-interactive authentication first
+                self.ssh_client.connect(
+                    hostname=self.config.UDM_IP,
+                    username='root',
+                    password=self.config.UDM_ROOT_PASSWORD,
+                    timeout=30,
+                    look_for_keys=False,
+                    allow_agent=False,
+                    auth_timeout=30
+                )
+                logger.info(f"Successfully connected to UDM at {self.config.UDM_IP}")
+                return True
+            except paramiko.AuthenticationException as auth_e:
+                logger.warning(f"Standard authentication failed: {str(auth_e)}")
+                # Try keyboard-interactive authentication manually
+                try:
+                    self._connect_with_keyboard_interactive()
+                    logger.info(f"Successfully connected to UDM at {self.config.UDM_IP} using keyboard-interactive")
+                    return True
+                except Exception as ki_e:
+                    logger.error(f"Keyboard-interactive authentication also failed: {str(ki_e)}")
+                    raise auth_e
             
         except Exception as e:
             logger.error(f"Failed to connect to UDM: {str(e)}")
             return False
+    
+    def _connect_with_keyboard_interactive(self):
+        """Helper method to handle keyboard-interactive authentication"""
+        import socket
+        
+        # Create a new client for keyboard-interactive auth
+        self.ssh_client.close()
+        self.ssh_client = paramiko.SSHClient()
+        self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # Create transport manually to handle keyboard-interactive
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(30)
+        sock.connect((self.config.UDM_IP, 22))
+        
+        transport = paramiko.Transport(sock)
+        transport.start_client()
+        
+        # Try keyboard-interactive authentication
+        def auth_handler(title, instructions, prompt_list):
+            """Handle keyboard-interactive prompts"""
+            responses = []
+            for prompt, echo in prompt_list:
+                if 'password' in prompt.lower():
+                    responses.append(self.config.UDM_ROOT_PASSWORD)
+                else:
+                    responses.append('')
+            return responses
+        
+        transport.auth_interactive('root', auth_handler)
+        
+        # Create channel and set it on the client
+        self.ssh_client._transport = transport
     
     @log_execution_time
     def get_latest_backup_file(self) -> Optional[str]:
