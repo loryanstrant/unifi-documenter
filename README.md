@@ -262,6 +262,8 @@ networks:
 - Verify UDM IP address and credentials
 - Ensure SSH is enabled on UDM
 - Check firewall settings
+- The application supports both password and keyboard-interactive authentication
+- UDM typically requires keyboard-interactive authentication, which is automatically handled
 
 #### AI API Errors
 - Verify API key and endpoint
