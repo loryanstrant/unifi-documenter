@@ -260,7 +260,7 @@ class UniFiBackupAnalyzer:
             batch_path = os.path.join(output_dir, batch_filename)
             
             # Convert documentation to HTML if needed
-            if self.config.OUTPUT_FORMAT == 'html':
+            if self.config.OUTPUT_FORMAT.lower() == 'html':
                 html_documentation = convert_markdown_to_html(batch_documentation)
                 batch_content = generate_batch_html(doc_type, documents, html_documentation, files, timestamp)
             else:
