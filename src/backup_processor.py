@@ -302,8 +302,7 @@ class UniFiBackupProcessor:
                     # Run with timeout and automatically answer prompts
                     result = subprocess.run(
                         fix_cmd,
-                        input='y
-',
+                        input='y\n',
                         capture_output=True,
                         text=True,
                         timeout=60  # Maximum 60 seconds for repair
