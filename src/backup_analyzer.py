@@ -264,8 +264,7 @@ class UniFiBackupAnalyzer:
 
 """
             for i, file in enumerate(files, 1):
-                batch_content += f"{i}. `{os.path.basename(file)}`
-"
+                batch_content += f"{i}. `{os.path.basename(file)}`\n"
             
             with open(batch_path, 'w', encoding='utf-8') as f:
                 f.write(batch_content)
