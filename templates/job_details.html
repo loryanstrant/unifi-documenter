@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Details - UniFi Documenter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .nav-link {
+            color: #4a9eff;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        .nav-link:hover {
+            text-decoration: underline;
+        }
+        .job-info {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .job-info h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .info-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .info-value {
+            color: #333;
+            margin-top: 5px;
+        }
+        .files-section {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .files-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .files-grid {
+            display: grid;
+            gap: 15px;
+        }
+        .file-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+        .file-card:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+        .file-info {
+            flex: 1;
+        }
+        .file-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .file-meta {
+            font-size: 0.85em;
+            color: #666;
+        }
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: #4a9eff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #3a8eef;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-running {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .no-files {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Job {{ job.id }} Details</h1>
+            <a href="/" class="nav-link">← Back to Dashboard</a>
+        </div>
+
+        <div class="job-info">
+            <h2>Job Information</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Status</div>
+                    <div class="info-value">
+                        <span class="status-badge status-{{ job.status }}">{{ job.status }}</span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Total Documents</div>
+                    <div class="info-value">{{ job.total_documents }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Processed</div>
+                    <div class="info-value">{{ job.processed_documents }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Started</div>
+                    <div class="info-value">{{ job.start_time }}</div>
+                </div>
+                {% if job.end_time %}
+                <div class="info-item">
+                    <div class="info-label">Completed</div>
+                    <div class="info-value">{{ job.end_time }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="files-section">
+            <h2>Generated Files ({{ files|length }})</h2>
+            {% if files %}
+                <div class="files-grid">
+                    {% for file in files %}
+                    <div class="file-card">
+                        <div class="file-info">
+                            <div class="file-name">📄 {{ file.name }}</div>
+                            <div class="file-meta">
+                                Size: {{ "%.2f"|format(file.size / 1024) }} KB | 
+                                Modified: {{ file.modified }}
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <a href="/view/{{ job.id }}/{{ file.name }}" target="_blank" class="btn btn-primary">
+                                View
+                            </a>
+                            <a href="/download/{{ job.id }}/{{ file.name }}" class="btn btn-secondary">
+                                Download
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="no-files">
+                    <p>No files generated yet for this job.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
