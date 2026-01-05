@@ -228,7 +228,10 @@ class UniFiBackupProcessor:
     @log_execution_time
     def decrypt_unf_file(self, encrypted_file: str, output_file: str, timeout_seconds: int = 300) -> bool:
         """
-        Decrypt .unf file to ZIP format using Python's zipfile module
+        Decrypt .unf file to ZIP format
+        
+        UniFi .unf files use AES-128-CBC with custom padding. The decryption
+        can result in a truncated EOCD record due to block boundaries.
         
         Args:
             encrypted_file: Path to the encrypted .unf file
@@ -273,53 +276,68 @@ class UniFiBackupProcessor:
                     pass
                 return False
             
-            logger.info("Decryption completed, attempting to repair ZIP file with Python zipfile")
+            logger.info("Decryption completed, validating ZIP file")
             
-            # Try to repair and copy the ZIP file using Python's zipfile module
-            # This is much safer and more resource-efficient than 'zip -FF'
+            # Check if ZIP is valid or needs repair
+            repair_needed = False
             try:
-                # First, try to open and validate the ZIP
                 with zipfile.ZipFile(tmp_filename, 'r') as zip_test:
-                    # Test if we can read the file list
-                    zip_test.namelist()
-                    logger.info("ZIP file appears valid, copying to output location")
+                    file_count = len(zip_test.namelist())
+                    logger.info(f"ZIP file is valid with {file_count} files, copying to output")
+                    shutil.copy2(tmp_filename, output_file)
+                    
+            except zipfile.BadZipFile as e:
+                error_msg = str(e).lower()
+                logger.warning(f"ZIP validation failed: {e}")
+                repair_needed = True
+            
+            # If repair is needed, use zip utility with strict timeout
+            if repair_needed:
+                logger.info("Attempting ZIP repair with zip utility (60s timeout)")
                 
-                # If we got here, the ZIP is valid, just copy it
-                shutil.copy2(tmp_filename, output_file)
-                
-            except zipfile.BadZipFile:
-                logger.warning("ZIP file has issues, attempting repair...")
-                
-                # Try to salvage what we can from the corrupted ZIP
-                # Read the raw data and try to rebuild
                 try:
-                    with open(tmp_filename, 'rb') as f_in:
-                        # Look for ZIP file signature (PK\x03\x04)
-                        data = f_in.read()
-                        
-                        # Find the start of actual ZIP data
-                        zip_start = data.find(b'PK\x03\x04')
-                        if zip_start == -1:
-                            logger.error("No valid ZIP signature found in decrypted data")
-                            os.unlink(tmp_filename)
-                            return False
-                        
-                        logger.info(f"Found ZIP signature at offset {zip_start}")
-                        
-                        # Write the corrected data
-                        with open(output_file, 'wb') as f_out:
-                            f_out.write(data[zip_start:])
-                        
-                        # Try to validate the repaired file
+                    # Use zip -FF with strict timeout and resource limits
+                    fix_cmd = ['zip', '-FF', tmp_filename, '--out', output_file]
+                    
+                    # Run with timeout and automatically answer prompts
+                    result = subprocess.run(
+                        fix_cmd,
+                        input='y
+',
+                        capture_output=True,
+                        text=True,
+                        timeout=60  # Maximum 60 seconds for repair
+                    )
+                    
+                    if result.returncode != 0:
+                        logger.error(f"ZIP repair failed: {result.stderr}")
+                        os.unlink(tmp_filename)
+                        if os.path.exists(output_file):
+                            os.unlink(output_file)
+                        return False
+                    
+                    # Validate the repaired file
+                    try:
                         with zipfile.ZipFile(output_file, 'r') as zip_test:
                             file_count = len(zip_test.namelist())
-                            logger.info(f"Successfully repaired ZIP file with {file_count} files")
-                            
-                except Exception as repair_error:
-                    logger.error(f"ZIP repair failed: {str(repair_error)}")
+                            logger.info(f"ZIP repair successful with {file_count} files")
+                    except zipfile.BadZipFile as e:
+                        logger.error(f"Repaired ZIP is still invalid: {e}")
+                        os.unlink(tmp_filename)
+                        if os.path.exists(output_file):
+                            os.unlink(output_file)
+                        return False
+                        
+                except subprocess.TimeoutExpired:
+                    logger.error("ZIP repair timed out after 60 seconds")
                     os.unlink(tmp_filename)
                     if os.path.exists(output_file):
                         os.unlink(output_file)
+                    return False
+                except FileNotFoundError:
+                    logger.error("zip utility not found - cannot repair truncated ZIP file")
+                    logger.error("Please install zip utility in the container")
+                    os.unlink(tmp_filename)
                     return False
             
             # Clean up temporary file
@@ -339,7 +357,7 @@ class UniFiBackupProcessor:
         except Exception as e:
             logger.error(f"Decryption failed: {str(e)}")
             return False
-    
+
     @log_execution_time
     def extract_zip_file(self, zip_file: str, extract_dir: str) -> bool:
         """Extract ZIP file contents"""
