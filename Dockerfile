@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     openssh-client \
     sshpass \
     openssl \
+    zip \
     unzip \
     gzip \
     jq \
