@@ -116,9 +116,33 @@ def create_app(config: Config) -> Flask:
         """Get all jobs"""
         return jsonify(progress_tracker.get_jobs_history())
     
-    @app.route('/api/job/<job_id>')
+    @app.route('/job/<job_id>')
     def get_job(job_id):
-        """Get specific job details"""
+        """Get specific job details page"""
+        jobs = progress_tracker.get_jobs_history()
+        job = next((j for j in jobs if j['id'] == job_id), None)
+        if not job:
+            return "Job not found", 404
+        
+        # Get output files if job is completed
+        files = []
+        if job['status'] == 'completed' and job.get('output_dir'):
+            analysis_dir = os.path.join(job['output_dir'], 'analysis')
+            if os.path.exists(analysis_dir):
+                for file in os.listdir(analysis_dir):
+                    if file.endswith(('.html', '.md')):
+                        file_path = os.path.join(analysis_dir, file)
+                        files.append({
+                            'name': file,
+                            'size': os.path.getsize(file_path),
+                            'modified': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
+                        })
+        
+        return render_template('job_details.html', job=job, files=files)
+    
+    @app.route('/api/job/<job_id>')
+    def get_job_api(job_id):
+        """Get specific job details as JSON (API endpoint)"""
         jobs = progress_tracker.get_jobs_history()
         job = next((j for j in jobs if j['id'] == job_id), None)
         if not job:
