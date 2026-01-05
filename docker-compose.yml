@@ -10,6 +10,22 @@ services:
     
     container_name: unifi-documenter
     restart: unless-stopped
+    
+    # Resource limits to prevent system overload
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'          # Maximum 2 CPU cores
+          memory: 2G           # Maximum 2GB RAM
+        reservations:
+          cpus: '0.5'          # Reserve at least 0.5 CPU cores
+          memory: 512M         # Reserve at least 512MB RAM
+    
+    # Additional resource controls
+    mem_swappiness: 0            # Disable swap to prevent disk thrashing
+    oom_kill_disable: false      # Allow OOM killer if needed (safety)
+    pids_limit: 200              # Limit number of processes
+    
     environment:
       # Schedule Configuration
       - SCHEDULE_FREQUENCY=daily  # daily, weekly, monthly
