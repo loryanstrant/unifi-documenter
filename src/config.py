@@ -40,6 +40,7 @@ class Config:
     # Output Configuration
     OUTPUT_FORMAT = os.getenv('OUTPUT_FORMAT', 'markdown')  # markdown, json, both
     MAX_DOCUMENT_SIZE = int(os.getenv('MAX_DOCUMENT_SIZE', '50000'))
+    BATCH_SIZE = int(os.getenv('BATCH_SIZE', '20'))  # Number of documents to process per AI call
     INCLUDE_RAW_DATA = os.getenv('INCLUDE_RAW_DATA', 'false').lower() == 'true'
     
     # Paths

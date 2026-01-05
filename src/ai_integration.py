@@ -260,7 +260,7 @@ class AIManager:
                 data_str = str(data)
             
             # Limit data size to prevent token overflow
-            max_data_size = min(len(data_str), 30000)  # Limit to ~30k characters
+            max_data_size = min(len(data_str), self.config.MAX_DOCUMENT_SIZE)
             if len(data_str) > max_data_size:
                 data_str = data_str[:max_data_size] + "\n... (truncated)"
                 logger.warning(f"Data truncated to {max_data_size} characters")

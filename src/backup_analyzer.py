@@ -38,17 +38,28 @@ class UniFiBackupAnalyzer:
             analysis_dir = os.path.join(output_folder, 'analysis')
             os.makedirs(analysis_dir, exist_ok=True)
             
-            # Process each document file
+            # Group documents by type for intelligent batch processing
             analyzed_documents = []
             
-            logger.info(f"Starting analysis of {len(document_files)} documents")
+            logger.info(f"Starting analysis of {len(document_files)} documents using batch processing")
+            grouped_documents = self._group_documents_by_type(document_files)
             
-            for i, doc_file in enumerate(document_files):
-                logger.info(f"Analyzing document {i+1}/{len(document_files)}: {os.path.basename(doc_file)}")
+            logger.info(f"Grouped documents into {len(grouped_documents)} categories: {', '.join(grouped_documents.keys())}")
+            
+            # Process each group in batches
+            for doc_type, files in grouped_documents.items():
+                logger.info(f"Processing {len(files)} {doc_type} documents in batches of {self.config.BATCH_SIZE}")
                 
-                doc_analysis = self._analyze_single_document(doc_file, analysis_dir)
-                if doc_analysis:
-                    analyzed_documents.append(doc_analysis)
+                # Process in batches
+                for i in range(0, len(files), self.config.BATCH_SIZE):
+                    batch_files = files[i:i+self.config.BATCH_SIZE]
+                    batch_num = (i // self.config.BATCH_SIZE) + 1
+                    total_batches = (len(files) + self.config.BATCH_SIZE - 1) // self.config.BATCH_SIZE
+                    
+                    logger.info(f"Processing {doc_type} batch {batch_num}/{total_batches} ({len(batch_files)} documents)")
+                    
+                    batch_results = self._process_batch(doc_type, batch_files, analysis_dir)
+                    analyzed_documents.extend(batch_results)
             
             # Generate summary analysis
             summary = self._generate_summary_analysis(analyzed_documents, analysis_dir)
@@ -131,6 +142,156 @@ class UniFiBackupAnalyzer:
         except Exception as e:
             logger.error(f"Failed to analyze document {doc_file}: {str(e)}")
             return None
+    
+    def _group_documents_by_type(self, files: List[str]) -> Dict[str, List[str]]:
+        """Group documents by type for better context and batch processing."""
+        groups = {
+            'devices': [],
+            'networks': [],
+            'settings': [],
+            'users': [],
+            'firewall': [],
+            'wireless': [],
+            'ports': [],
+            'other': []
+        }
+        
+        for file in files:
+            try:
+                with open(file, 'r') as f:
+                    data = json.load(f)
+                
+                if not isinstance(data, dict):
+                    groups['other'].append(file)
+                    continue
+                
+                # Determine type from content structure
+                filename = os.path.basename(file).lower()
+                keys = set(data.keys())
+                
+                # Device identification
+                if 'mac' in keys and ('ip' in keys or 'model' in keys or 'type' in keys):
+                    groups['devices'].append(file)
+                # Network/VLAN identification
+                elif any(k in keys for k in ['vlan', 'network_group', 'subnet', 'dhcp', 'gateway']):
+                    groups['networks'].append(file)
+                # Firewall rules
+                elif any(k in keys for k in ['rule_index', 'src_address', 'dst_address', 'action']):
+                    groups['firewall'].append(file)
+                # Wireless/SSID
+                elif any(k in keys for k in ['ssid', 'wpa', 'security', 'wlan']):
+                    groups['wireless'].append(file)
+                # Port configuration
+                elif any(k in keys for k in ['port_idx', 'port_conf_id', 'portconf']):
+                    groups['ports'].append(file)
+                # User/client data
+                elif any(k in keys for k in ['username', 'user_id', 'hostname', 'noted']):
+                    groups['users'].append(file)
+                # Settings
+                elif 'setting' in filename or any(k in keys for k in ['key', 'site_id', 'enabled']):
+                    groups['settings'].append(file)
+                else:
+                    groups['other'].append(file)
+                    
+            except Exception as e:
+                logger.warning(f"Failed to classify document {file}: {str(e)}")
+                groups['other'].append(file)
+        
+        # Remove empty groups
+        return {k: v for k, v in groups.items() if v}
+    
+    def _process_batch(self, doc_type: str, files: List[str], output_dir: str) -> List[Dict]:
+        """Process a batch of related documents together for better context."""
+        try:
+            # Load all files in batch
+            documents = []
+            file_metadata = []
+            
+            for file in files:
+                try:
+                    with open(file, 'r') as f:
+                        data = json.load(f)
+                    documents.append(data)
+                    file_metadata.append({
+                        'file': file,
+                        'data': data
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to load {file}: {str(e)}")
+            
+            if not documents:
+                return []
+            
+            # Create combined prompt for batch
+            batch_data = {
+                'type': doc_type,
+                'count': len(documents),
+                'documents': documents
+            }
+            
+            context = f"UniFi {doc_type.title()} Configuration Batch ({len(documents)} items)"
+            batch_documentation = self.ai_manager.generate_documentation(batch_data, context)
+            
+            if not batch_documentation:
+                logger.warning(f"Failed to generate batch documentation for {doc_type}")
+                return []
+            
+            # Save batch documentation
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            batch_filename = f"batch_{doc_type}_{timestamp}.md"
+            batch_path = os.path.join(output_dir, batch_filename)
+            
+            # Create enhanced markdown
+            batch_content = f"""# UniFi {doc_type.title()} Configuration Batch
+
+**Generated:** {datetime.now().isoformat()}  
+**Document Count:** {len(documents)}  
+**Configuration Type:** {doc_type.title()}  
+
+---
+
+{batch_documentation}
+
+---
+
+## Batch Metadata
+
+- **Processed Files**: {len(files)}
+- **Document Type**: {doc_type}
+- **Batch Generated**: {datetime.now().isoformat()}
+
+### Files in This Batch
+
+"""
+            for i, file in enumerate(files, 1):
+                batch_content += f"{i}. `{os.path.basename(file)}`
+"
+            
+            with open(batch_path, 'w', encoding='utf-8') as f:
+                f.write(batch_content)
+            
+            # Return analysis results for each document
+            results = []
+            for metadata in file_metadata:
+                doc_hash = hashlib.md5(json.dumps(metadata['data'], sort_keys=True).encode()).hexdigest()[:8]
+                results.append({
+                    'document_id': doc_hash,
+                    'original_file': metadata['file'],
+                    'markdown_file': batch_path,  # All documents share the batch file
+                    'json_file': None,
+                    'config_type': doc_type,
+                    'data_keys': list(metadata['data'].keys()) if isinstance(metadata['data'], dict) else [],
+                    'file_size': os.path.getsize(batch_path) // len(files),  # Approximate per-doc size
+                    'character_count': len(batch_content) // len(files),
+                    'processed_as_batch': True
+                })
+            
+            logger.info(f"Successfully processed batch of {len(results)} {doc_type} documents")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to process batch for {doc_type}: {str(e)}")
+            return []
     
     def _create_enhanced_markdown(self, documentation: str, data: Dict, 
                                  config_type: str, doc_hash: str, original_file: str) -> str:
