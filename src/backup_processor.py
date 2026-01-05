@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import zipfile
 import subprocess
+import signal
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -23,6 +24,14 @@ except ImportError:
     from config import Config
 
 logger = logging.getLogger('unifi_documenter')
+
+class TimeoutException(Exception):
+    """Exception raised when an operation times out"""
+    pass
+
+def timeout_handler(signum, frame):
+    """Signal handler for timeout"""
+    raise TimeoutException("Operation timed out")
 
 class UniFiBackupProcessor:
     """Handles downloading, decrypting, and processing UniFi backup files"""
@@ -217,13 +226,22 @@ class UniFiBackupProcessor:
             return False
     
     @log_execution_time
-    def decrypt_unf_file(self, encrypted_file: str, output_file: str) -> bool:
-        """Decrypt .unf file to ZIP format"""
+    def decrypt_unf_file(self, encrypted_file: str, output_file: str, timeout_seconds: int = 300) -> bool:
+        """
+        Decrypt .unf file to ZIP format using Python's zipfile module
+        
+        Args:
+            encrypted_file: Path to the encrypted .unf file
+            output_file: Path where the decrypted ZIP should be saved
+            timeout_seconds: Maximum time allowed for decryption (default: 5 minutes)
+        """
         try:
-            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                tmp_filename = tmp_file.name
+            logger.info(f"Starting decryption of {encrypted_file} with {timeout_seconds}s timeout")
             
             # Decrypt using OpenSSL
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+                tmp_filename = tmp_file.name
+            
             decrypt_cmd = [
                 'openssl', 'enc', '-d',
                 '-in', encrypted_file,
@@ -234,29 +252,90 @@ class UniFiBackupProcessor:
                 '-nopad'
             ]
             
-            result = subprocess.run(decrypt_cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                logger.error(f"OpenSSL decryption failed: {result.stderr}")
+            try:
+                result = subprocess.run(
+                    decrypt_cmd, 
+                    capture_output=True, 
+                    text=True,
+                    timeout=timeout_seconds
+                )
+                
+                if result.returncode != 0:
+                    logger.error(f"OpenSSL decryption failed: {result.stderr}")
+                    os.unlink(tmp_filename)
+                    return False
+                    
+            except subprocess.TimeoutExpired:
+                logger.error(f"OpenSSL decryption timed out after {timeout_seconds} seconds")
+                try:
+                    os.unlink(tmp_filename)
+                except:
+                    pass
                 return False
             
-            # Fix ZIP file using zip command
-            fix_cmd = ['zip', '-FF', tmp_filename, '--out', output_file]
-            result = subprocess.run(fix_cmd, input='y\n', capture_output=True, text=True)
+            logger.info("Decryption completed, attempting to repair ZIP file with Python zipfile")
+            
+            # Try to repair and copy the ZIP file using Python's zipfile module
+            # This is much safer and more resource-efficient than 'zip -FF'
+            try:
+                # First, try to open and validate the ZIP
+                with zipfile.ZipFile(tmp_filename, 'r') as zip_test:
+                    # Test if we can read the file list
+                    zip_test.namelist()
+                    logger.info("ZIP file appears valid, copying to output location")
+                
+                # If we got here, the ZIP is valid, just copy it
+                shutil.copy2(tmp_filename, output_file)
+                
+            except zipfile.BadZipFile:
+                logger.warning("ZIP file has issues, attempting repair...")
+                
+                # Try to salvage what we can from the corrupted ZIP
+                # Read the raw data and try to rebuild
+                try:
+                    with open(tmp_filename, 'rb') as f_in:
+                        # Look for ZIP file signature (PK\x03\x04)
+                        data = f_in.read()
+                        
+                        # Find the start of actual ZIP data
+                        zip_start = data.find(b'PK\x03\x04')
+                        if zip_start == -1:
+                            logger.error("No valid ZIP signature found in decrypted data")
+                            os.unlink(tmp_filename)
+                            return False
+                        
+                        logger.info(f"Found ZIP signature at offset {zip_start}")
+                        
+                        # Write the corrected data
+                        with open(output_file, 'wb') as f_out:
+                            f_out.write(data[zip_start:])
+                        
+                        # Try to validate the repaired file
+                        with zipfile.ZipFile(output_file, 'r') as zip_test:
+                            file_count = len(zip_test.namelist())
+                            logger.info(f"Successfully repaired ZIP file with {file_count} files")
+                            
+                except Exception as repair_error:
+                    logger.error(f"ZIP repair failed: {str(repair_error)}")
+                    os.unlink(tmp_filename)
+                    if os.path.exists(output_file):
+                        os.unlink(output_file)
+                    return False
             
             # Clean up temporary file
             os.unlink(tmp_filename)
-            
-            if result.returncode != 0:
-                logger.error(f"ZIP fix failed: {result.stderr}")
-                return False
             
             if not os.path.exists(output_file):
                 logger.error("Decrypted ZIP file was not created")
                 return False
             
-            logger.info(f".unf file decrypted successfully to {output_file}")
+            file_size = os.path.getsize(output_file)
+            logger.info(f".unf file decrypted successfully to {output_file} ({file_size:,} bytes)")
             return True
             
+        except TimeoutException:
+            logger.error(f"Decryption operation timed out after {timeout_seconds} seconds")
+            return False
         except Exception as e:
             logger.error(f"Decryption failed: {str(e)}")
             return False
@@ -268,11 +347,24 @@ class UniFiBackupProcessor:
             os.makedirs(extract_dir, exist_ok=True)
             
             with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir)
+                # Get list of files for logging
+                file_list = zip_ref.namelist()
+                logger.info(f"Extracting {len(file_list)} files from ZIP archive")
+                
+                # Extract with better error handling
+                for file_info in zip_ref.infolist():
+                    try:
+                        zip_ref.extract(file_info, extract_dir)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract {file_info.filename}: {str(e)}")
+                        # Continue with other files
             
             logger.info(f"ZIP file extracted to {extract_dir}")
             return True
             
+        except zipfile.BadZipFile as e:
+            logger.error(f"Invalid ZIP file: {str(e)}")
+            return False
         except Exception as e:
             logger.error(f"ZIP extraction failed: {str(e)}")
             return False
@@ -418,9 +510,9 @@ class UniFiBackupProcessor:
             if not self.download_backup_file(remote_backup, local_backup):
                 return None
             
-            # Step 3: Decrypt .unf file
+            # Step 3: Decrypt .unf file (with 5 minute timeout)
             decrypted_zip = os.path.join(output_folder, "decrypted.zip")
-            if not self.decrypt_unf_file(local_backup, decrypted_zip):
+            if not self.decrypt_unf_file(local_backup, decrypted_zip, timeout_seconds=300):
                 return None
             
             # Step 4: Extract ZIP
