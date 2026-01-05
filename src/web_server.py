@@ -5,6 +5,7 @@ import os
 import json
 import logging
 from datetime import datetime
+import pytz
 from pathlib import Path
 from typing import Dict, List, Optional
 from flask import Flask, render_template, jsonify, send_from_directory
@@ -13,6 +14,16 @@ from threading import Lock
 from .config import Config
 
 logger = logging.getLogger('unifi_documenter')
+
+
+def _get_now_tz(config):
+    """Get timezone-aware current time"""
+    try:
+        tz = pytz.timezone(config.TIMEZONE if hasattr(config, 'TIMEZONE') else 'UTC')
+        return datetime.now(tz)
+    except:
+        return datetime.now()
+
 
 class ProgressTracker:
     """Thread-safe progress tracking for analysis jobs"""
@@ -27,7 +38,7 @@ class ProgressTracker:
         with self.lock:
             self.current_job = {
                 'id': job_id,
-                'start_time': datetime.now().isoformat(),
+                'start_time': (_get_now_tz(self.config) if self.config else datetime.now()).isoformat(),
                 'total_documents': total_documents,
                 'groups': groups,
                 'current_group': None,
@@ -57,7 +68,7 @@ class ProgressTracker:
         """Mark job as complete"""
         with self.lock:
             if self.current_job:
-                self.current_job['end_time'] = datetime.now().isoformat()
+                self.current_job['end_time'] = (_get_now_tz(self.config) if self.config else datetime.now()).isoformat()
                 self.current_job['status'] = 'completed' if success else 'failed'
                 self.current_job['output_dir'] = output_dir
                 self.jobs_history.insert(0, self.current_job.copy())

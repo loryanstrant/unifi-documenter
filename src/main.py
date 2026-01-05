@@ -52,6 +52,7 @@ class UniFiDocumenter:
             
             # Validate configuration
             self.config = Config()
+progress_tracker.config = config
             if not self.config.validate():
                 return False
             

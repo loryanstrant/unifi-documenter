@@ -4,7 +4,17 @@ Logging utilities for UniFi Documenter
 import logging
 import sys
 from datetime import datetime
+import pytz
 from pathlib import Path
+
+def get_timezone_aware_now(config):
+    """Get current datetime in configured timezone"""
+    try:
+        tz = pytz.timezone(config.TIMEZONE)
+        return datetime.now(tz)
+    except:
+        return datetime.now()
+
 
 def setup_logging(log_level: str = "INFO", log_file: str = None) -> logging.Logger:
     """
