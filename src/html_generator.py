@@ -1,8 +1,9 @@
 """
 HTML generation utilities for UniFi documentation
 """
-import json
-from typing import Dict, List, Any
+import re
+import html as html_lib
+from typing import Dict, List
 from datetime import datetime
 
 
@@ -12,12 +13,17 @@ def generate_html_document(documentation: str, data: Dict, config_type: str,
     
     timestamp = datetime.now().isoformat()
     
+    # Escape user-controlled data to prevent XSS
+    safe_config_type = html_lib.escape(config_type)
+    safe_doc_hash = html_lib.escape(doc_hash)
+    safe_original_file = html_lib.escape(original_file)
+    
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UniFi {config_type} Configuration - {doc_hash}</title>
+    <title>UniFi {safe_config_type} Configuration - {safe_doc_hash}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -169,19 +175,19 @@ def generate_html_document(documentation: str, data: Dict, config_type: str,
 <body>
     <div class="container">
         <div class="header">
-            <h1>UniFi {config_type} Configuration</h1>
-            <p>Document ID: <code>{doc_hash}</code></p>
+            <h1>UniFi {safe_config_type} Configuration</h1>
+            <p>Document ID: <code>{safe_doc_hash}</code></p>
         </div>
         
         <div class="metadata">
             <div class="metadata-grid">
                 <div class="metadata-item">
                     <div class="metadata-label">Configuration Type</div>
-                    <div class="metadata-value">{config_type}</div>
+                    <div class="metadata-value">{safe_config_type}</div>
                 </div>
                 <div class="metadata-item">
                     <div class="metadata-label">Document ID</div>
-                    <div class="metadata-value">{doc_hash}</div>
+                    <div class="metadata-value">{safe_doc_hash}</div>
                 </div>
                 <div class="metadata-item">
                     <div class="metadata-label">Generated</div>
@@ -189,11 +195,11 @@ def generate_html_document(documentation: str, data: Dict, config_type: str,
                 </div>
                 <div class="metadata-item">
                     <div class="metadata-label">Original File</div>
-                    <div class="metadata-value">{original_file}</div>
+                    <div class="metadata-value">{safe_original_file}</div>
                 </div>
             </div>
             <div style="margin-top: 15px;">
-                <span class="tag">{config_type}</span>
+                <span class="tag">{safe_config_type}</span>
                 {' '.join(f'<span class="tag">{key}</span>' for key in list(data.keys())[:5] if isinstance(data, dict))}
             </div>
         </div>
@@ -217,12 +223,16 @@ def generate_batch_html(doc_type: str, documents: List[Dict], documentation: str
                        files: List[str], timestamp: str) -> str:
     """Generate HTML for a batch of documents"""
     
+    # Escape user-controlled data to prevent XSS
+    safe_doc_type = html_lib.escape(doc_type)
+    safe_doc_type_title = html_lib.escape(doc_type.title())
+    
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UniFi {doc_type.title()} Configuration Batch</title>
+    <title>UniFi {safe_doc_type_title} Configuration Batch</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -347,7 +357,7 @@ def generate_batch_html(doc_type: str, documents: List[Dict], documentation: str
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌐 UniFi {doc_type.title()} Configuration Batch</h1>
+            <h1>🌐 UniFi {safe_doc_type_title} Configuration Batch</h1>
             <p>Comprehensive analysis of {len(documents)} related configurations</p>
         </div>
         
@@ -392,40 +402,40 @@ def generate_batch_html(doc_type: str, documents: List[Dict], documentation: str
 
 def convert_markdown_to_html(markdown_text: str) -> str:
     """Convert simple markdown to HTML (basic conversion)"""
-    html = markdown_text
+    html_text = markdown_text
     
-    # Headers
-    html = html.replace('\n### ', '\n<h3>').replace('\n##', '\n<h2>').replace('\n# ', '\n<h1>')
-    html = html.replace('</h1>\n', '</h1>').replace('</h2>\n', '</h2>').replace('</h3>\n', '</h3>')
+    # Headers (fixed: added space after ##)
+    html_text = html_text.replace('\n### ', '\n<h3>').replace('\n## ', '\n<h2>').replace('\n# ', '\n<h1>')
     
-    # Bold and italic
-    import re
-    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
-    html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
-    html = re.sub(r'`(.+?)`', r'<code>\1</code>', html)
+    # Bold and italic with HTML escaping
+    html_text = re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{html_lib.escape(m.group(1))}</strong>', html_text)
+    html_text = re.sub(r'\*(.+?)\*', lambda m: f'<em>{html_lib.escape(m.group(1))}</em>', html_text)
+    html_text = re.sub(r'`(.+?)`', lambda m: f'<code>{html_lib.escape(m.group(1))}</code>', html_text)
     
-    # Lists
-    lines = html.split('\n')
+    # Lists with proper escaping
+    lines = html_text.split('\n')
     result_lines = []
     in_list = False
     
     for line in lines:
-        if line.strip().startswith('- ') or line.strip().startswith('* '):
+        stripped = line.strip()
+        if stripped.startswith('- ') or stripped.startswith('* '):
             if not in_list:
                 result_lines.append('<ul>')
                 in_list = True
-            result_lines.append(f'<li>{line.strip()[2:]}</li>')
-        elif line.strip().startswith(tuple(f'{i}.' for i in range(10))):
+            result_lines.append(f'<li>{html_lib.escape(stripped[2:])}</li>')
+        elif re.match(r'^\d+\.\s', stripped):  # Fixed: handles multi-digit numbers
             if not in_list:
                 result_lines.append('<ol>')
                 in_list = 'ol'
-            result_lines.append(f'<li>{line.strip().split(".", 1)[1].strip()}</li>')
+            content = stripped.split(".", 1)[1].strip()
+            result_lines.append(f'<li>{html_lib.escape(content)}</li>')
         else:
             if in_list:
                 result_lines.append('</ol>' if in_list == 'ol' else '</ul>')
                 in_list = False
-            if line.strip():
-                result_lines.append(f'<p>{line}</p>')
+            if stripped:
+                result_lines.append(f'<p>{html_lib.escape(stripped)}</p>')
             else:
                 result_lines.append('<br>')
     
