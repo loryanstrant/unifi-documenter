@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UniFi Documenter - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+        .status-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .status-card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-box .label {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .stat-box .value {
+            color: #333;
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .jobs-list {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .job-item {
+            background: #f9f9f9;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .job-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .job-item.completed { border-left-color: #4caf50; }
+        .job-item.failed { border-left-color: #f44336; }
+        .job-item.running { border-left-color: #ff9800; animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .job-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+        .job-status {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .job-status.completed { background: #4caf50; color: white; }
+        .job-status.failed { background: #f44336; color: white; }
+        .job-status.running { background: #ff9800; color: white; }
+        .job-details {
+            color: #666;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+        .no-job {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 1.2em;
+        }
+        .refresh-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #4caf50;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .view-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+        .view-button:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 UniFi Documenter</h1>
+            <p>Real-time monitoring and documentation generation</p>
+            <p style="font-size: 0.9em; margin-top: 5px;">
+                <a href="https://github.com/loryanstrant/unifi-documenter" target="_blank" style="color: white; text-decoration: none; opacity: 0.8;">
+                    📦 GitHub Repository
+                </a>
+            </p>
+        </div>
+
+        <div id="current-job-container"></div>
+
+        <div class="jobs-list">
+            <h2>Recent Analysis Jobs <span class="refresh-indicator"></span></h2>
+            <div id="jobs-history"></div>
+        </div>
+    </div>
+
+    <script>
+        let lastStatus = null;
+
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                updateCurrentJob(data.current_job);
+                updateJobsHistory(data.jobs_history);
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        }
+
+        function updateCurrentJob(job) {
+            const container = document.getElementById('current-job-container');
+            
+            if (!job) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const progress = job.progress_percent || 0;
+            
+            container.innerHTML = `
+                <div class="status-card">
+                    <h2>Current Analysis Job</h2>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="label">Total Documents</div>
+                            <div class="value">${job.total_documents}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="label">Processed</div>
+                            <div class="value">${job.processed_documents}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="label">Current Group</div>
+                            <div class="value" style="font-size: 1.2em;">${job.current_group || 'Starting...'}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="label">Batch Progress</div>
+                            <div class="value" style="font-size: 1.2em;">${job.current_batch}/${job.total_batches}</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%">
+                            ${progress.toFixed(1)}%
+                        </div>
+                    </div>
+                    <p style="color: #666; margin-top: 10px;">
+                        Started: ${new Date(job.start_time).toLocaleString()}
+                    </p>
+                </div>
+            `;
+        }
+
+        function updateJobsHistory(jobs) {
+            const container = document.getElementById('jobs-history');
+            
+            if (!jobs || jobs.length === 0) {
+                container.innerHTML = '<div class="no-job">No completed jobs yet</div>';
+                return;
+            }
+
+            container.innerHTML = jobs.map(job => {
+                const startTime = new Date(job.start_time).toLocaleString();
+                const endTime = job.end_time ? new Date(job.end_time).toLocaleString() : 'In progress';
+                
+                return `
+                    <div class="job-item ${job.status}" onclick="viewJob('${job.id}')">
+                        <div class="job-header">
+                            <div class="job-title">Job ${job.id}</div>
+                            <div class="job-status ${job.status}">${job.status}</div>
+                        </div>
+                        <div class="job-details">
+                            <strong>Documents:</strong> ${job.total_documents}<br>
+                            <strong>Started:</strong> ${startTime}<br>
+                            <strong>Completed:</strong> ${endTime}
+                        </div>
+                        ${job.status === 'completed' ? '<button class="view-button" onclick="event.stopPropagation(); viewJob(\'' + job.id + '\')">View Results</button>' : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function viewJob(jobId) {
+            window.location.href = `/api/job/${jobId}`;
+        }
+
+        // Fetch status every 2 seconds
+        setInterval(fetchStatus, 2000);
+        fetchStatus();
+    </script>
+</body>
+</html>
