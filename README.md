@@ -4,19 +4,33 @@
 [![Docker Pulls](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/loryanstrant/unifi-documenter/pkgs/container/unifi-documenter)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-An intelligent Docker-based solution for automatically backing up, analyzing, and documenting UniFi Dream Machine configurations using AI. This tool creates human-readable and RAG-optimized markdown documentation from UniFi backup files.
+An intelligent Docker-based solution for automatically backing up, analyzing, and documenting UniFi Dream Machine configurations using AI. This tool creates human-readable documentation with a modern web interface for real-time monitoring.
 
-## Features
+![UniFi Documenter Dashboard](docs/dashboard-screenshot.png)
 
+## ✨ Features
+
+### Core Capabilities
 - 🔄 **Automated Scheduling**: Daily, weekly, or monthly backup processing
 - 🤖 **AI-Powered Analysis**: Support for OpenAI, Azure OpenAI, Ollama, and custom APIs
-- 📚 **RAG-Optimized Output**: Structured markdown perfect for RAG systems
-- 🐳 **Docker-Ready**: Complete containerized solution
+- 📚 **Smart Batch Processing**: Intelligent document grouping with 20x performance improvement
+- 🐳 **Docker-Ready**: Complete containerized solution with multi-platform support (amd64/arm64)
 - 🌍 **Timezone Support**: Configurable scheduling with timezone awareness
-- 📊 **Comprehensive Documentation**: Detailed analysis with summaries and indexes
 - 🔐 **Secure**: SSH-based backup retrieval with encrypted processing
 
-## Quick Start
+### New Web Interface Features
+- 🌐 **Real-time Dashboard**: Monitor analysis progress with live updates
+- 📊 **Progress Tracking**: Visual progress bars showing document processing status
+- 📁 **File Management**: View and download generated documentation directly from the web interface
+- 📈 **Job History**: Track all analysis jobs with detailed statistics
+- �� **Professional HTML Output**: Beautiful, responsive HTML documentation with modern styling
+- 🔗 **Direct File Access**: Click to view or download any generated document
+
+### Output Formats
+- **HTML** (New!): Professional, styled documentation with syntax highlighting and responsive design
+- **Markdown**: Traditional RAG-optimized markdown for search and analysis systems
+
+## 🚀 Quick Start
 
 ### 1. Clone and Configure
 
@@ -34,9 +48,6 @@ cp .env.template .env
 ```bash
 # Pull the latest image from GitHub Container Registry
 docker pull ghcr.io/loryanstrant/unifi-documenter:latest
-
-# Or use docker-compose with the pre-built image
-# (update docker-compose.yml to use: image: ghcr.io/loryanstrant/unifi-documenter:latest)
 ```
 
 ### 3. Configure Environment Variables
@@ -52,6 +63,10 @@ UDM_ROOT_PASSWORD=your_password_here
 AI_PROVIDER=openai
 AI_API_KEY=your_openai_api_key_here
 
+# Output Configuration
+OUTPUT_FORMAT=html          # 'html' or 'markdown'
+WEB_PORT=8080              # Web interface port
+
 # Schedule Configuration
 SCHEDULE_FREQUENCY=daily
 SCHEDULE_TIME=02:00
@@ -64,6 +79,9 @@ TIMEZONE=America/New_York
 # Start the service
 docker-compose up -d
 
+# Access the web interface
+# Open http://localhost:8080 in your browser
+
 # Check logs
 docker-compose logs -f
 
@@ -71,7 +89,131 @@ docker-compose logs -f
 docker-compose ps
 ```
 
-## Docker Images
+## 🌐 Web Interface
+
+The web interface provides real-time monitoring and access to your documentation:
+
+### Dashboard Features
+- **Current Job Status**: See which documents are being processed in real-time
+- **Progress Tracking**: Visual progress bars with document counts and batch information
+- **Generated Files**: View list of generated files as they're created
+- **Job History**: Review past analysis jobs with timestamps and statistics
+- **Version Information**: Track the version and build of your running instance
+
+### Accessing the Web Interface
+By default, the web interface is available at `http://localhost:8080`. You can customize the port:
+
+```yaml
+# docker-compose.yml
+ports:
+  - "8090:8080"  # External port 8090, internal port 8080
+```
+
+Or via environment variable:
+```bash
+WEB_PORT=8090
+```
+
+### Security Considerations
+The web interface is designed for local/internal network use. For production deployments, please review [README_SECURITY.md](README_SECURITY.md) for important security recommendations including:
+- Network binding configuration
+- Reverse proxy setup with authentication
+- Access control best practices
+
+## 📋 Configuration Options
+
+### Output Configuration
+
+```bash
+# Output format: 'html' or 'markdown'
+OUTPUT_FORMAT=html
+
+# Maximum document size (default: 2MB)
+MAX_DOCUMENT_SIZE=2000000
+
+# Batch processing size
+BATCH_SIZE=20
+
+# Enable web interface (default: true)
+WEB_ENABLED=true
+WEB_PORT=8080
+```
+
+### Schedule Configuration
+
+```bash
+# Frequency: daily, weekly, monthly, manual
+SCHEDULE_FREQUENCY=daily
+
+# Time for scheduled runs (24-hour format)
+SCHEDULE_TIME=02:00
+
+# Your timezone
+TIMEZONE=America/New_York
+
+# Day of week (1=Monday, 7=Sunday) - for weekly schedules
+SCHEDULE_DAY_OF_WEEK=1
+
+# Day of month (1-31) - for monthly schedules
+SCHEDULE_DAY_OF_MONTH=1
+```
+
+### AI Provider Configuration
+
+#### OpenAI
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=sk-...
+AI_MODEL=gpt-4o-mini
+```
+
+#### Azure OpenAI
+```bash
+AI_PROVIDER=azure
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_API_KEY=your_key
+AZURE_OPENAI_DEPLOYMENT=gpt-4
+AZURE_OPENAI_API_VERSION=2024-02-15-preview
+```
+
+#### Ollama (Local AI)
+```bash
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+AI_MODEL=qwen2.5:32b
+
+# Recommended models for documentation:
+# - qwen2.5:32b (Best quality, slower)
+# - llama3.1:8b (Good balance)
+# - phi3.5:latest (Fastest, smaller)
+```
+
+#### Custom OpenAI-Compatible API
+```bash
+AI_PROVIDER=custom
+CUSTOM_API_BASE_URL=https://your-api.com/v1
+CUSTOM_API_KEY=your_key
+AI_MODEL=your-model
+```
+
+## 📊 Performance
+
+### Batch Processing Performance
+- **Before**: 730 documents in ~2.5 hours (sequential processing)
+- **After**: 730 documents in ~18 minutes (batch processing with smart grouping)
+- **Improvement**: ~8.3x faster processing time
+
+### Smart Document Grouping
+Documents are automatically grouped by type for efficient batch processing:
+- **Devices**: Switches, access points, gateways
+- **Networks**: VLANs, subnets, routing configurations  
+- **Firewall**: Rules, port forwarding, security policies
+- **Wireless**: SSIDs, wireless networks, radio settings
+- **Ports**: Port configurations and profiles
+- **Users**: User accounts and authentication
+- **Settings**: System settings and preferences
+
+## 🐳 Docker Images
 
 ### Pre-built Images
 The latest images are available on GitHub Container Registry:
@@ -84,6 +226,11 @@ docker pull ghcr.io/loryanstrant/unifi-documenter:latest
 docker pull ghcr.io/loryanstrant/unifi-documenter:v1.0.0
 ```
 
+### Multi-Platform Support
+Images are built for both:
+- `linux/amd64` (x86_64)
+- `linux/arm64` (ARM64/v8)
+
 ### Using Pre-built Images
 Update your `docker-compose.yml` to use the pre-built image:
 
@@ -92,258 +239,176 @@ services:
   unifi-documenter:
     image: ghcr.io/loryanstrant/unifi-documenter:latest
     # Remove the 'build: .' line when using pre-built images
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backups:/app/backups
+      - ./output:/app/output
+    env_file:
+      - .env
 ```
 
-## Configuration Options
+## 📁 Directory Structure
 
-### Schedule Configuration
+```
+unifi-documenter/
+├── backups/          # UniFi backup files (*.unf)
+├── output/           # Generated documentation (HTML/Markdown)
+├── logs/             # Application logs
+├── src/              # Source code
+│   ├── backup_analyzer.py    # Core analysis with batch processing
+│   ├── web_server.py         # Flask web interface
+│   ├── html_generator.py     # HTML output generation
+│   ├── markdown_generator.py # Markdown output generation
+│   ├── ai_documenter.py      # AI provider integration
+│   ├── config.py             # Configuration management
+│   └── version.py            # Version tracking
+├── templates/        # HTML templates for web interface
+├── static/          # Static assets (CSS, images)
+├── docker-compose.yml
+├── Dockerfile
+├── .env.template
+└── README.md
+```
 
-| Variable | Options | Description |
-|----------|---------|-------------|
-| `SCHEDULE_FREQUENCY` | `daily`, `weekly`, `monthly` | How often to run |
-| `SCHEDULE_TIME` | `HH:MM` (24-hour) | When to run |
-| `SCHEDULE_DAY` | 1-7 (weekly), 1-31 (monthly) | Which day to run |
-| `TIMEZONE` | IANA timezone | Timezone for scheduling |
+## 🔧 Manual Backup Processing
 
-### UDM Configuration
+To manually process a backup without scheduling:
 
-| Variable | Description |
-|----------|-------------|
-| `UDM_IP` | IP address of your UniFi Dream Machine |
-| `UDM_ROOT_PASSWORD` | Root password for SSH access |
-| `REMOTE_BACKUP_DIR` | Directory containing backup files |
-
-### AI Provider Configuration
-
-#### OpenAI (Default)
 ```bash
-AI_PROVIDER=openai
-AI_API_URL=https://api.openai.com/v1
-AI_API_KEY=your_openai_api_key
-AI_MODEL=gpt-4o-mini
+# Copy your backup file to the backups directory
+cp /path/to/backup.unf ./backups/
+
+# Set schedule to manual mode
+echo "SCHEDULE_FREQUENCY=manual" >> .env
+
+# Restart container
+docker-compose restart
+
+# Monitor progress in web interface
+# Or check logs
+docker-compose logs -f
 ```
 
-#### Azure OpenAI
-```bash
-AI_PROVIDER=azure-openai
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=your-deployment
-AZURE_OPENAI_API_VERSION=2024-02-01
-AI_API_KEY=your_azure_key
-```
+## 📖 Generated Documentation
 
-#### Ollama (Local/Self-hosted)
-```bash
-AI_PROVIDER=ollama
-OLLAMA_URL=http://localhost:11434
-# Or for Docker: OLLAMA_URL=http://host.docker.internal:11434
-# Or remote: OLLAMA_URL=http://your-ollama-server:11434
-OLLAMA_MODEL=llama3
-```
+### HTML Output (New!)
+- Professional styling with gradient headers and responsive design
+- Syntax-highlighted code blocks and formatted tables
+- Metadata cards showing configuration details
+- Cross-references between related documents
+- Batch reports with statistics and document summaries
 
-#### Custom OpenAI-Compatible API
-```bash
-AI_PROVIDER=custom
-AI_API_URL=https://your-api-endpoint.com/v1
-AI_API_KEY=your_api_key
-AI_MODEL=your_model_name
-```
+### Markdown Output
+- Structured with clear headers and sections
+- Optimized for RAG (Retrieval-Augmented Generation)
+- Includes metadata and cross-references
+- Easy to search and index
 
-**Note**: Each AI provider uses different endpoint configuration variables. The system automatically selects the correct endpoint based on the `AI_PROVIDER` setting.
-
-## Output Structure
-
-The system generates organized documentation in the `/output` directory:
-
+### Example Output Structure
 ```
 output/
-└── unifi-backup-2024-01-15-02-00/
-    ├── decrypted.zip                 # Decrypted backup file
-    ├── extracted/                    # Raw extracted data
-    ├── db.json                      # Full database in JSON
-    ├── json_documents/              # Individual JSON documents
-    └── analysis/                    # AI-generated documentation
-        ├── INDEX.md                 # Master index
-        ├── SUMMARY.md              # Overall analysis
-        ├── doc_abc12345.md         # Individual config docs
-        └── doc_def67890.md
+├── devices_a1b2c3d4.html          # Individual device config
+├── networks_e5f6g7h8.html         # Network configuration
+├── firewall_i9j0k1l2.html         # Firewall rules
+├── batch_devices_2026-01-05.html  # Batch report for devices
+└── ...
 ```
 
-### Documentation Features
-
-- **Structured Markdown**: Clean, searchable format
-- **Metadata Frontmatter**: YAML metadata for each document
-- **Cross-References**: Linked navigation between documents
-- **RAG Optimization**: Formatted for retrieval systems
-- **Configuration Summaries**: High-level overviews
-- **Searchable Content**: Keyword-rich descriptions
-
-## Running Modes
-
-### Scheduled Mode (Default)
-Runs continuously and processes backups on schedule:
-```bash
-docker-compose up -d
-```
-
-### One-Time Execution
-Process backup once and exit:
-```bash
-docker run --rm -e RUN_MODE=once \
-  --env-file .env \
-  -v ./output:/app/output \
-  unifi-documenter
-```
-
-### Manual Trigger
-Run immediately on startup, then continue on schedule:
-```bash
-docker-compose run -e RUN_IMMEDIATELY=true unifi-documenter
-```
-
-## Monitoring
-
-### Health Checks
-The container includes built-in health checks:
-```bash
-docker-compose ps  # Shows health status
-```
-
-### Logs
-View application logs:
-```bash
-# Container logs
-docker-compose logs -f unifi-documenter
-
-# Application log file
-tail -f output/unifi-documenter.log
-```
-
-### Status Information
-Check scheduler status and next run time in the logs.
-
-## Advanced Configuration
-
-### Custom AI Models
-
-For specialized analysis, configure custom models:
-```bash
-AI_MODEL=gpt-4-turbo-preview  # For more detailed analysis
-# or
-AI_MODEL=gpt-3.5-turbo       # For faster, cost-effective processing
-```
-
-### Output Customization
-
-```bash
-OUTPUT_FORMAT=markdown        # markdown, json, both
-MAX_DOCUMENT_SIZE=50000      # Characters per document
-INCLUDE_RAW_DATA=true        # Include original JSON
-```
-
-### Network Configuration
-
-For custom network setups:
-```yaml
-# docker-compose.yml
-networks:
-  unifi-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-```
-
-## Troubleshooting
+## 🔍 Troubleshooting
 
 ### Common Issues
 
-#### SSH Connection Failed
-- Verify UDM IP address and credentials
-- Ensure SSH is enabled on UDM
-- Check firewall settings
-- The application supports both password and keyboard-interactive authentication
-- UDM typically requires keyboard-interactive authentication, which is automatically handled
-
-#### AI API Errors
-- Verify API key and endpoint
-- Check model availability
-- Monitor rate limits
-
-#### No Backup Files Found
-- Verify backup directory path
-- Check UDM backup settings
-- Ensure automatic backups are enabled
-
-#### Permission Issues
+**Container won't start:**
 ```bash
-# Fix output directory permissions
-sudo chown -R 1000:1000 output/
+# Check logs
+docker-compose logs
+
+# Verify .env file
+cat .env | grep -v '^#' | grep -v '^$'
+
+# Check permissions
+chmod 755 backups output logs
 ```
 
-### Debug Mode
-
-Enable verbose logging:
+**Web interface not accessible:**
 ```bash
-docker-compose run -e LOG_LEVEL=DEBUG unifi-documenter
+# Check if port is available
+netstat -an | grep 8080
+
+# Check container is running
+docker-compose ps
+
+# Verify port mapping
+docker-compose port unifi-documenter 8080
 ```
 
-### Testing Configuration
-
-Test without scheduling:
+**Backup processing fails:**
 ```bash
-docker-compose run -e RUN_MODE=once unifi-documenter
+# Verify UDM connection
+ssh root@${UDM_IP} 'ls -la /data/autobackup/'
+
+# Check AI provider
+docker-compose exec unifi-documenter python -m src.ai_documenter test
+
+# Review logs
+docker-compose logs | grep ERROR
 ```
 
-## Security Considerations
+**Large files truncated:**
+- Default limit is 2MB per document
+- Adjust `MAX_DOCUMENT_SIZE` in .env if needed
+- Check logs for truncation warnings
 
-- Store credentials securely (use Docker secrets in production)
-- Regularly rotate UDM passwords
-- Secure AI API keys
-- Monitor log files for sensitive data
-- Use least-privilege access for UDM
+## 📈 Resource Usage
 
-## Development
+### Recommended Resources
+- **CPU**: 2 cores minimum
+- **RAM**: 2GB minimum
+- **Disk**: 1GB + space for output files
+- **Network**: Stable connection to UDM and AI provider
 
-### Local Development
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run locally
-python src/main.py
+### Container Limits
+Default limits (can be adjusted in docker-compose.yml):
+```yaml
+resources:
+  limits:
+    cpus: '2'
+    memory: 2G
+    pids: 200
 ```
 
-### Building Custom Images
+## 🤝 Contributing
 
-```bash
-# Build image
-docker build -t unifi-documenter:custom .
-
-# Use custom image
-# Update docker-compose.yml to use custom image
-```
-
-## Contributing
+Contributions are welcome! Please:
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+4. Submit a pull request
 
-## License
+## 📄 License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## 🔒 Security
 
-For issues and questions:
-- Check the troubleshooting section
-- Review logs for error details
-- Open an issue with detailed information
+For security considerations regarding the web interface, please review [README_SECURITY.md](README_SECURITY.md).
+
+To report security vulnerabilities, please email security@yourdomain.com instead of using the issue tracker.
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/loryanstrant/unifi-documenter/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/loryanstrant/unifi-documenter/discussions)
+- **Documentation**: [Wiki](https://github.com/loryanstrant/unifi-documenter/wiki)
+
+## 🙏 Acknowledgments
+
+- Built with Python, Flask, and Docker
+- AI documentation powered by OpenAI, Azure, and Ollama
+- Inspired by the UniFi community's need for better documentation tools
 
 ---
 
-**Note**: This tool requires SSH access to your UniFi Dream Machine and appropriate API access for your chosen AI provider. Ensure you have the necessary permissions and credentials before deployment.
+**Version**: 1.0.0 | **Build**: 2026.01.05
