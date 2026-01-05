@@ -38,8 +38,10 @@ class Config:
     AZURE_OPENAI_DEPLOYMENT = os.getenv('AZURE_OPENAI_DEPLOYMENT', '')
     
     # Output Configuration
-    OUTPUT_FORMAT = os.getenv('OUTPUT_FORMAT', 'markdown')  # markdown, json, both
-    MAX_DOCUMENT_SIZE = int(os.getenv('MAX_DOCUMENT_SIZE', '50000'))
+    OUTPUT_FORMAT = os.getenv('OUTPUT_FORMAT', 'html')  # html, markdown, json, both
+    WEB_ENABLED = os.getenv('WEB_ENABLED', 'true').lower() == 'true'
+    WEB_PORT = int(os.getenv('WEB_PORT', '8080'))
+    MAX_DOCUMENT_SIZE = int(os.getenv('MAX_DOCUMENT_SIZE', '2000000'))  # 2MB for batch processing
     BATCH_SIZE = int(os.getenv('BATCH_SIZE', '20'))  # Number of documents to process per AI call
     INCLUDE_RAW_DATA = os.getenv('INCLUDE_RAW_DATA', 'false').lower() == 'true'
     

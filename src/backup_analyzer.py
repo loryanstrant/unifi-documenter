@@ -12,6 +12,8 @@ import hashlib
 from .config import Config
 from .ai_integration import AIManager
 from .utils import log_execution_time
+from .web_server import progress_tracker
+from .html_generator import generate_batch_html, convert_markdown_to_html
 
 logger = logging.getLogger('unifi_documenter')
 
@@ -38,6 +40,9 @@ class UniFiBackupAnalyzer:
             analysis_dir = os.path.join(output_folder, 'analysis')
             os.makedirs(analysis_dir, exist_ok=True)
             
+            # Start progress tracking
+            job_id = f"job-{timestamp}"
+            
             # Group documents by type for intelligent batch processing
             analyzed_documents = []
             
@@ -45,6 +50,9 @@ class UniFiBackupAnalyzer:
             grouped_documents = self._group_documents_by_type(document_files)
             
             logger.info(f"Grouped documents into {len(grouped_documents)} categories: {', '.join(grouped_documents.keys())}")
+            
+            # Start job tracking
+            progress_tracker.start_job(job_id, len(document_files), grouped_documents)
             
             # Process each group in batches
             for doc_type, files in grouped_documents.items():
@@ -57,6 +65,11 @@ class UniFiBackupAnalyzer:
                     total_batches = (len(files) + self.config.BATCH_SIZE - 1) // self.config.BATCH_SIZE
                     
                     logger.info(f"Processing {doc_type} batch {batch_num}/{total_batches} ({len(batch_files)} documents)")
+                    
+                    # Update progress
+                    if batch_num == 1:
+                        progress_tracker.update_group(doc_type, total_batches)
+                    progress_tracker.update_batch(batch_num, len(batch_files))
                     
                     batch_results = self._process_batch(doc_type, batch_files, analysis_dir)
                     analyzed_documents.extend(batch_results)
@@ -77,6 +90,10 @@ class UniFiBackupAnalyzer:
             }
             
             logger.info(f"Analysis completed successfully. Generated documentation for {len(analyzed_documents)} documents")
+            
+            # Mark job as complete
+            progress_tracker.complete_job(output_folder, success=True)
+            
             return result
             
         except Exception as e:
@@ -237,12 +254,18 @@ class UniFiBackupAnalyzer:
                 return []
             
             # Save batch documentation
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            batch_filename = f"batch_{doc_type}_{timestamp}.md"
+            timestamp = datetime.now().isoformat()
+            timestamp_safe = timestamp.replace(':', '-').replace('.', '-')
+            batch_filename = f"batch_{doc_type}_{timestamp_safe}.html"
             batch_path = os.path.join(output_dir, batch_filename)
             
-            # Create enhanced markdown
-            batch_content = f"""# UniFi {doc_type.title()} Configuration Batch
+            # Convert documentation to HTML if needed
+            if self.config.OUTPUT_FORMAT == 'html':
+                html_documentation = convert_markdown_to_html(batch_documentation)
+                batch_content = generate_batch_html(doc_type, documents, html_documentation, files, timestamp)
+            else:
+                # Keep markdown format
+                batch_content = f"""# UniFi {doc_type.title()} Configuration Batch
 
 **Generated:** {datetime.now().isoformat()}  
 **Document Count:** {len(documents)}  
@@ -258,13 +281,13 @@ class UniFiBackupAnalyzer:
 
 - **Processed Files**: {len(files)}
 - **Document Type**: {doc_type}
-- **Batch Generated**: {datetime.now().isoformat()}
+- **Batch Generated**: {timestamp}
 
 ### Files in This Batch
 
 """
-            for i, file in enumerate(files, 1):
-                batch_content += f"{i}. `{os.path.basename(file)}`\n"
+                for i, file in enumerate(files, 1):
+                    batch_content += f"{i}. `{os.path.basename(file)}`\n"
             
             with open(batch_path, 'w', encoding='utf-8') as f:
                 f.write(batch_content)

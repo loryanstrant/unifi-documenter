@@ -15,6 +15,8 @@ from src.utils import setup_logging
 from src.backup_processor import UniFiBackupProcessor
 from src.backup_analyzer import UniFiBackupAnalyzer
 from src.scheduler import UniFiScheduler
+from src.web_server import start_web_server
+import threading
 
 logger = logging.getLogger('unifi_documenter')
 
@@ -56,6 +58,12 @@ class UniFiDocumenter:
             logger.info(f"Configuration validated successfully")
             logger.info(f"Schedule: {self.config.SCHEDULE_FREQUENCY} at {self.config.SCHEDULE_TIME} ({self.config.TIMEZONE})")
             logger.info(f"AI Provider: {self.config.AI_PROVIDER}")
+            
+            # Start web server in background thread
+            if self.config.WEB_ENABLED:
+                web_thread = threading.Thread(target=start_web_server, args=(self.config,), daemon=True)
+                web_thread.start()
+                logger.info(f"Web server started on port {self.config.WEB_PORT}")
             
             return True
             

@@ -26,6 +26,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ ./src/
 COPY config/ ./config/
+COPY templates/ ./templates/
+COPY static/ ./static/
 COPY healthcheck.py ./
 COPY docker-entrypoint.sh ./
 
@@ -41,6 +43,9 @@ ENV TZ=UTC
 
 # Create a non-root user
 RUN useradd -m -u 1000 unifi-user
+
+# Expose web interface port
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
