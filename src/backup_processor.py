@@ -302,8 +302,7 @@ class UniFiBackupProcessor:
                     # Run with timeout and automatically answer prompts
                     result = subprocess.run(
                         fix_cmd,
-                        input='y
-',
+                        input='y\n',
                         capture_output=True,
                         text=True,
                         timeout=60  # Maximum 60 seconds for repair
@@ -457,16 +456,58 @@ class UniFiBackupProcessor:
             
             # Write JSON documents
             with open(json_file, 'w') as f:
-                for doc in documents:
-                    import json
-                    # Convert ObjectId and other BSON types to strings
-                    def convert_bson_types(obj):
-                        if hasattr(obj, '__dict__'):
-                            return str(obj)
-                        return obj
+                import json
+                from datetime import datetime
+                from bson import ObjectId
+                
+                # Keep track of seen objects to avoid circular references
+                def convert_bson_types(obj, seen=None):
+                    if seen is None:
+                        seen = set()
                     
-                    json_doc = json.dumps(doc, default=convert_bson_types, separators=(',', ':'))
-                    f.write(json_doc + '\n')
+                    # Handle ObjectId
+                    if isinstance(obj, ObjectId):
+                        return str(obj)
+                    
+                    # Handle datetime
+                    if isinstance(obj, datetime):
+                        return obj.isoformat()
+                    
+                    # Handle bytes
+                    if isinstance(obj, bytes):
+                        try:
+                            return obj.decode('utf-8')
+                        except:
+                            return obj.hex()
+                    
+                    # Handle objects with __dict__ but avoid circular references
+                    obj_id = id(obj)
+                    if obj_id in seen:
+                        return f"<circular reference to {type(obj).__name__}>"
+                    
+                    if hasattr(obj, '__dict__'):
+                        seen.add(obj_id)
+                        try:
+                            return str(obj)
+                        finally:
+                            seen.discard(obj_id)
+                    
+                    # Default: convert to string
+                    return str(obj)
+                
+                for doc in documents:
+                    try:
+                        json_doc = json.dumps(doc, default=lambda x: convert_bson_types(x, set()), separators=(',', ':'))
+                        f.write(json_doc + '\n')
+                    except Exception as e:
+                        logger.warning(f"Failed to serialize document: {str(e)}")
+                        # Try a simpler serialization
+                        try:
+                            simplified = {k: str(v) for k, v in doc.items()}
+                            json_doc = json.dumps(simplified, separators=(',', ':'))
+                            f.write(json_doc + '\n')
+                        except:
+                            pass
             
             logger.info(f"BSON converted to JSON: {json_file} ({len(documents)} documents)")
             return True
