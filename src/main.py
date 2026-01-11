@@ -15,7 +15,7 @@ from src.utils import setup_logging
 from src.backup_processor import UniFiBackupProcessor
 from src.backup_analyzer import UniFiBackupAnalyzer
 from src.scheduler import UniFiScheduler
-from src.web_server import start_web_server
+from src.web_server import start_web_server, progress_tracker
 import threading
 
 logger = logging.getLogger('unifi_documenter')
@@ -52,9 +52,11 @@ class UniFiDocumenter:
             
             # Validate configuration
             self.config = Config()
-progress_tracker.config = config
             if not self.config.validate():
                 return False
+            
+            # Pass config to progress tracker for timezone support
+            progress_tracker.config = self.config
             
             logger.info(f"Configuration validated successfully")
             logger.info(f"Schedule: {self.config.SCHEDULE_FREQUENCY} at {self.config.SCHEDULE_TIME} ({self.config.TIMEZONE})")
