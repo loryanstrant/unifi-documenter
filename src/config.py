@@ -27,10 +27,20 @@ class Config:
     AI_API_URL = os.getenv('AI_API_URL', 'https://api.openai.com/v1')
     AI_API_KEY = os.getenv('AI_API_KEY', '')
     AI_MODEL = os.getenv('AI_MODEL', 'gpt-4o-mini')
+    AI_CONTEXT_WINDOW = int(os.getenv('AI_CONTEXT_WINDOW', '128000'))  # Total token window for the model
+    AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '4000'))  # Max tokens for completion/output
     
     # Ollama Configuration
     OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3')
+    
+    # Embedding / RAG Configuration
+    EMBEDDING_ENABLED = os.getenv('EMBEDDING_ENABLED', 'true').lower() == 'true'
+    EMBEDDING_PROVIDER = os.getenv('EMBEDDING_PROVIDER', 'ollama')  # ollama, openai, custom
+    EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'nomic-embed-text')
+    QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
+    EMBEDDING_COLLECTION = os.getenv('EMBEDDING_COLLECTION', 'unifi_configs')
+    EMBEDDING_TOP_K = int(os.getenv('EMBEDDING_TOP_K', '5'))
     
     # Azure OpenAI Configuration
     AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT', '')

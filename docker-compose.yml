@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: UnifiDocumenter-Qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - unifi-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
   unifi-documenter:
     # Use pre-built image (recommended)
     image: ghcr.io/loryanstrant/unifi-documenter:latest
@@ -10,6 +29,8 @@ services:
     
     container_name: unifi-documenter
     restart: unless-stopped
+    depends_on:
+      - qdrant
     
     # Resource limits to prevent system overload
     deploy:
@@ -43,8 +64,18 @@ services:
       - AI_API_URL=https://api.openai.com/v1
       - AI_API_KEY=your_openai_api_key_here
       - AI_MODEL=gpt-4o-mini
+      - AI_CONTEXT_WINDOW=128000  # Total tokens the model supports (e.g. 4096 for small models)
+      - AI_MAX_TOKENS=4000        # Max tokens for AI output (must be < AI_CONTEXT_WINDOW)
       
-      # Optional Ollama Configuration (if AI_PROVIDER=ollama)
+      # Embedding Configuration
+      - EMBEDDING_ENABLED=true
+      - EMBEDDING_PROVIDER=ollama  # ollama, openai, custom
+      - EMBEDDING_MODEL=nomic-embed-text
+      - QDRANT_URL=http://qdrant:6333
+      - EMBEDDING_COLLECTION=unifi_configs
+      - EMBEDDING_TOP_K=5
+      
+      # Optional Ollama Configuration (if AI_PROVIDER=ollama or EMBEDDING_PROVIDER=ollama)
       # - OLLAMA_URL=http://host.docker.internal:11434
       # - OLLAMA_MODEL=llama3
       
@@ -63,6 +94,9 @@ services:
       - ./config:/app/config:ro
     networks:
       - unifi-net
+
+volumes:
+  qdrant_data:
 
 networks:
   unifi-net:

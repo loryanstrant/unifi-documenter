@@ -338,14 +338,35 @@ class AIManager:
             else:
                 data_str = str(data)
             
-            # Limit data size to prevent token overflow
-            max_data_size = min(len(data_str), self.config.MAX_DOCUMENT_SIZE)
-            if len(data_str) > max_data_size:
-                data_str = data_str[:max_data_size] + "\n... (truncated)"
-                logger.warning(f"Data truncated to {max_data_size} characters")
+            # Calculate the token budget for input data.
+            # Rough estimate: 1 token ≈ 4 characters.
+            chars_per_token = 4
+            max_completion_tokens = self.config.AI_MAX_TOKENS
+            context_window = self.config.AI_CONTEXT_WINDOW
+
+            # Reserve tokens for: system message (~37 tok) + prompt
+            # template (~100 tok) + context string + completion output.
+            system_msg_tokens = 40
+            template_tokens = 120
+            context_tokens = len(context) // chars_per_token + 1
+            overhead_tokens = system_msg_tokens + template_tokens + context_tokens
+            available_data_tokens = context_window - max_completion_tokens - overhead_tokens
+            if available_data_tokens < 0:
+                available_data_tokens = 0
+            max_data_chars = available_data_tokens * chars_per_token
+
+            # Also honor the legacy MAX_DOCUMENT_SIZE setting
+            max_data_chars = min(max_data_chars, self.config.MAX_DOCUMENT_SIZE)
+
+            if len(data_str) > max_data_chars:
+                data_str = data_str[:max_data_chars] + "\n... (truncated)"
+                logger.warning(
+                    f"Data truncated to {max_data_chars} characters "
+                    f"(context_window={context_window}, max_tokens={max_completion_tokens})"
+                )
             
             prompt = self._create_documentation_prompt(data_str, context)
-            return self.provider.generate_completion(prompt, max_tokens=4000)
+            return self.provider.generate_completion(prompt, max_tokens=max_completion_tokens)
             
         except Exception as e:
             logger.error(f"Documentation generation failed: {str(e)}")
@@ -382,13 +403,22 @@ Please provide the analysis in markdown format:
             return "Unknown"
         
         try:
+            # Limit the data snippet to fit within the context window.
+            chars_per_token = 4
+            # This is a lightweight call — reserve only 50 tokens for output.
+            type_max_tokens = 50
+            overhead_tokens = 80  # system + prompt template
+            available_tokens = self.config.AI_CONTEXT_WINDOW - type_max_tokens - overhead_tokens
+            max_chars = max(available_tokens * chars_per_token, 200)
+            data_snippet = json.dumps(data, indent=2)[:max_chars]
+
             prompt = f"""
 Analyze this UniFi configuration data and identify what type of configuration it represents.
 Respond with just the category name (e.g., "Access Point", "Network Settings", "Security Policy", "User Management", etc.)
 
-Data: {json.dumps(data, indent=2)[:1000]}
+Data: {data_snippet}
 """
-            result = self.provider.generate_completion(prompt, max_tokens=50)
+            result = self.provider.generate_completion(prompt, max_tokens=type_max_tokens)
             return result.strip() if result else "Unknown"
             
         except Exception as e:
