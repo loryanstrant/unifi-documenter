@@ -124,7 +124,7 @@ class UniFiBackupAnalyzer:
                     
                     # Apply cooldown before LLM call (except for the first call)
                     if llm_call_count > 0 and self.config.AI_COOLDOWN_SECONDS > 0:
-                        logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown before LLM call #{llm_call_count + 1}")
+                        logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown after LLM call #{llm_call_count}")
                         time.sleep(self.config.AI_COOLDOWN_SECONDS)
                     
                     batch_results = self._process_batch(doc_type, batch_files, analysis_dir)
@@ -133,12 +133,13 @@ class UniFiBackupAnalyzer:
             
             # Apply cooldown before summary generation
             if llm_call_count > 0 and self.config.AI_COOLDOWN_SECONDS > 0:
-                logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown before summary generation")
+                logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown after LLM call #{llm_call_count}")
                 time.sleep(self.config.AI_COOLDOWN_SECONDS)
             
             # Generate summary analysis
-            logger.info(f"Generated documentation for {len(analyzed_documents)} documents using {llm_call_count + 1} LLM calls")
             summary = self._generate_summary_analysis(analyzed_documents, analysis_dir)
+            llm_call_count += 1  # Count the summary generation
+            logger.info(f"Generated documentation for {len(analyzed_documents)} documents using {llm_call_count} LLM calls")
             
             # Create master index
             index = self._create_documentation_index(analyzed_documents, summary, analysis_dir)
