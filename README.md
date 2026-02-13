@@ -36,7 +36,7 @@ An intelligent Docker-based solution for automatically backing up, analyzing, an
 
 ## 🧠 RAG Architecture
 
-UniFi Documenter uses a two-stage **Retrieval-Augmented Generation (RAG)** pipeline:
+UniFi Documenter uses a two-stage **Retrieval-Augmented Generation (RAG)** pipeline with optimized two-phase processing:
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌────────────────┐
@@ -57,9 +57,18 @@ UniFi Documenter uses a two-stage **Retrieval-Augmented Generation (RAG)** pipel
                                                                └───────────────┘
 ```
 
-1. **Embed** — Each configuration document is converted into a vector embedding and stored in Qdrant.
-2. **Retrieve** — When generating documentation for a batch, the system queries Qdrant for the most semantically similar existing configurations to provide cross-reference context.
-3. **Generate** — The LLM receives both the raw configuration data *and* the retrieved context, producing richer, more accurate documentation.
+### Two-Phase Processing (NVRAM Optimized)
+
+The system uses a two-phase approach to minimize NVRAM usage:
+
+1. **Phase 1: Embedding** — ALL configuration documents are embedded first and stored in Qdrant. This completes before any LLM processing begins.
+2. **Phase 2: Generation** — After all embeddings are complete, the system retrieves relevant context from Qdrant and generates documentation using the LLM. An optional cooldown delay can be configured between LLM calls to reduce memory pressure.
+
+**Benefits:**
+- **Reduced NVRAM Usage**: Separating embedding and generation prevents memory spikes
+- **Better Stability**: Local models with limited VRAM (< 8GB) run more reliably
+- **Improved Quality**: Complete embedding context available before generation begins
+- **Configurable Cooldown**: Optional delay between LLM calls further reduces memory pressure
 
 This approach significantly improves documentation quality because the LLM can reference related configurations (e.g., a firewall rule that references a VLAN) even when they are in different batches.
 
@@ -322,6 +331,31 @@ AI_MAX_TOKENS=1024
 ```
 
 The system automatically calculates how much configuration data fits in the remaining prompt budget and truncates as needed. Batch processing also respects the context window when combining documents.
+
+#### LLM Cooldown / Rate Limiting
+
+To reduce NVRAM pressure and prevent overloading local AI models, you can configure a cooldown delay between LLM generation calls:
+
+```bash
+# Delay (in seconds) between LLM generation requests
+# Default: 0 (disabled)
+# Recommended for local models: 2-5 seconds
+AI_COOLDOWN_SECONDS=3
+```
+
+**Benefits:**
+- **Reduces NVRAM Usage**: Gives the GPU time to free memory between requests
+- **Prevents Throttling**: Avoids rate limits on API-based providers
+- **Improves Stability**: Reduces risk of OOM errors with local models
+- **Better Performance**: Allows system resources to recover between calls
+
+**When to Use:**
+- Local models (Ollama, LocalAI) with limited VRAM (< 8GB)
+- Models running on shared GPU resources
+- API providers with rate limits
+- Systems with high memory pressure
+
+**Note:** The cooldown is applied between batch processing calls and summary generation. The embedding phase (Phase 1) completes before any LLM calls are made, ensuring all documents are embedded before documentation generation begins.
 
 ### Authentication Options
 
