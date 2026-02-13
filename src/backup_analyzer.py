@@ -297,9 +297,10 @@ class UniFiBackupAnalyzer:
                 query = f"UniFi {doc_type} configuration"
                 related = self.embedding_manager.retrieve_context(query)
                 if related:
+                    rag_snippet_len = 500
                     rag_context = "\n\n### Related Configuration Context (from vector DB)\n"
                     for i, hit in enumerate(related, 1):
-                        snippet = hit["text"][:500]
+                        snippet = hit["text"][:rag_snippet_len]
                         rag_context += f"\n**[{i}]** (score {hit['score']:.2f}):\n```json\n{snippet}\n```\n"
 
             context = f"UniFi {doc_type.title()} Configuration Batch ({len(documents)} items)"

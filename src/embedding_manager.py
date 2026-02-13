@@ -36,7 +36,7 @@ class EmbeddingProvider:
             return None
 
     def _ollama_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding using Ollama."""
+        """Generate embedding using Ollama (uses 'prompt' param, not 'input')."""
         try:
             response = requests.post(
                 f"{self.config.OLLAMA_URL}/api/embeddings",
@@ -56,29 +56,14 @@ class EmbeddingProvider:
 
     def _openai_embedding(self, text: str) -> Optional[List[float]]:
         """Generate embedding using OpenAI-compatible API."""
-        try:
-            headers = {"Content-Type": "application/json"}
-            if self.config.AI_API_KEY:
-                headers["Authorization"] = f"Bearer {self.config.AI_API_KEY}"
-            response = requests.post(
-                f"{self.config.AI_API_URL}/embeddings",
-                headers=headers,
-                json={"model": self.model, "input": text},
-                timeout=120,
-            )
-            if response.status_code == 200:
-                return response.json()["data"][0]["embedding"]
-            logger.error(
-                f"OpenAI embedding error - Status: {response.status_code}, "
-                f"Response: {response.text}"
-            )
-            return None
-        except Exception as e:
-            logger.error(f"OpenAI embedding error: {type(e).__name__} - {e}")
-            return None
+        return self._openai_compatible_embedding(text, "OpenAI")
 
     def _custom_embedding(self, text: str) -> Optional[List[float]]:
         """Generate embedding using a custom OpenAI-compatible endpoint."""
+        return self._openai_compatible_embedding(text, "Custom")
+
+    def _openai_compatible_embedding(self, text: str, label: str) -> Optional[List[float]]:
+        """Shared implementation for OpenAI-compatible embedding endpoints."""
         try:
             headers = {"Content-Type": "application/json"}
             if self.config.AI_API_KEY:
@@ -86,18 +71,19 @@ class EmbeddingProvider:
             response = requests.post(
                 f"{self.config.AI_API_URL}/embeddings",
                 headers=headers,
+                # OpenAI-compatible APIs use "input" (vs Ollama's "prompt")
                 json={"model": self.model, "input": text},
                 timeout=120,
             )
             if response.status_code == 200:
                 return response.json()["data"][0]["embedding"]
             logger.error(
-                f"Custom embedding error - Status: {response.status_code}, "
+                f"{label} embedding error - Status: {response.status_code}, "
                 f"Response: {response.text}"
             )
             return None
         except Exception as e:
-            logger.error(f"Custom embedding error: {type(e).__name__} - {e}")
+            logger.error(f"{label} embedding error: {type(e).__name__} - {e}")
             return None
 
     def is_available(self) -> bool:
