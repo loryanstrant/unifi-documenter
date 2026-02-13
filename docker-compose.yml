@@ -66,6 +66,7 @@ services:
       - AI_MODEL=gpt-4o-mini
       - AI_CONTEXT_WINDOW=128000  # Total tokens the model supports (e.g. 4096 for small models)
       - AI_MAX_TOKENS=4000        # Max tokens for AI output (must be < AI_CONTEXT_WINDOW)
+      - AI_COOLDOWN_SECONDS=0     # Delay between LLM calls (0=disabled, 2-5 recommended for local models)
       
       # Embedding Configuration
       - EMBEDDING_ENABLED=true
