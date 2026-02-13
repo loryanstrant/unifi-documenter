@@ -104,7 +104,7 @@ class UniFiBackupAnalyzer:
             logger.error(f"Error type: {type(e).__name__}")
             logger.error(f"AI Provider: {self.config.AI_PROVIDER}")
             import traceback
-            logger.error(f"Stack trace: {traceback.format_exc()}")
+            logger.debug(f"Stack trace: {traceback.format_exc()}")
             return None
     
     def _analyze_single_document(self, doc_file: str, output_dir: str) -> Optional[Dict]:
