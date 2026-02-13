@@ -284,13 +284,6 @@ class UniFiBackupAnalyzer:
             if not documents:
                 return []
             
-            # Create combined prompt for batch
-            batch_data = {
-                'type': doc_type,
-                'count': len(documents),
-                'documents': documents
-            }
-            
             # Retrieve related context from vector DB when available
             rag_context = ""
             if self.embedding_manager and self.embedding_manager.is_available():
@@ -306,6 +299,48 @@ class UniFiBackupAnalyzer:
             context = f"UniFi {doc_type.title()} Configuration Batch ({len(documents)} items)"
             if rag_context:
                 context += rag_context
+
+            # Estimate available token budget so we don't overflow
+            # the model's context window.
+            chars_per_token = 4
+            context_window = self.config.AI_CONTEXT_WINDOW if hasattr(self.config, 'AI_CONTEXT_WINDOW') else 128000
+            max_tokens = self.config.AI_MAX_TOKENS if hasattr(self.config, 'AI_MAX_TOKENS') else 4000
+            overhead_tokens = 160 + len(context) // chars_per_token
+            available_data_tokens = context_window - max_tokens - overhead_tokens
+            max_data_chars = max(available_data_tokens * chars_per_token, 200)
+
+            # Build the batch data, truncating documents that exceed
+            # the available budget so the prompt fits the context window.
+            batch_data = {
+                'type': doc_type,
+                'count': len(documents),
+                'documents': documents
+            }
+            batch_json = json.dumps(batch_data, indent=2)
+            if len(batch_json) > max_data_chars:
+                # Re-build with individually truncated documents
+                truncated_docs = []
+                per_doc_budget = max(max_data_chars // max(len(documents), 1) - 50, 100)
+                for doc in documents:
+                    doc_str = json.dumps(doc, indent=2)
+                    if len(doc_str) > per_doc_budget:
+                        doc_str = doc_str[:per_doc_budget]
+                        try:
+                            truncated_docs.append(json.loads(doc_str + '}'))
+                        except json.JSONDecodeError:
+                            truncated_docs.append({"_truncated": doc_str})
+                    else:
+                        truncated_docs.append(doc)
+                batch_data = {
+                    'type': doc_type,
+                    'count': len(truncated_docs),
+                    'documents': truncated_docs
+                }
+                logger.info(
+                    f"Truncated batch data to fit context window "
+                    f"(budget={max_data_chars} chars, context_window={context_window})"
+                )
+
             batch_documentation = self.ai_manager.generate_documentation(batch_data, context)
             
             if not batch_documentation:

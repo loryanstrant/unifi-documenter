@@ -299,6 +299,29 @@ AI_API_KEY=your_key        # Optional - omit if endpoint doesn't require auth
 # - Any OpenAI-compatible endpoint
 ```
 
+#### Token / Context Window Configuration
+
+Control how much data is sent to the AI model in each request. **Set `AI_CONTEXT_WINDOW` to match your model's context limit** — this is especially important for smaller local models.
+
+```bash
+# Total token context window of the model (prompt + completion)
+# Common sizes: 4096, 8192, 32768, 128000
+AI_CONTEXT_WINDOW=128000
+
+# Maximum tokens reserved for AI output/completion
+# Must be less than AI_CONTEXT_WINDOW
+AI_MAX_TOKENS=4000
+```
+
+**Example: fitting within a 4096-token model:**
+```bash
+AI_CONTEXT_WINDOW=4096
+AI_MAX_TOKENS=1024
+# → leaves ~2900 tokens for input data (~11,600 characters)
+```
+
+The system automatically calculates how much configuration data fits in the remaining prompt budget and truncates as needed. Batch processing also respects the context window when combining documents.
+
 ### Authentication Options
 
 API keys are now **optional** for all providers, enabling:

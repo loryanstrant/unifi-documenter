@@ -64,6 +64,8 @@ services:
       - AI_API_URL=https://api.openai.com/v1
       - AI_API_KEY=your_openai_api_key_here
       - AI_MODEL=gpt-4o-mini
+      - AI_CONTEXT_WINDOW=128000  # Total tokens the model supports (e.g. 4096 for small models)
+      - AI_MAX_TOKENS=4000        # Max tokens for AI output (must be < AI_CONTEXT_WINDOW)
       
       # Embedding Configuration
       - EMBEDDING_ENABLED=true

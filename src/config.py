@@ -27,6 +27,8 @@ class Config:
     AI_API_URL = os.getenv('AI_API_URL', 'https://api.openai.com/v1')
     AI_API_KEY = os.getenv('AI_API_KEY', '')
     AI_MODEL = os.getenv('AI_MODEL', 'gpt-4o-mini')
+    AI_CONTEXT_WINDOW = int(os.getenv('AI_CONTEXT_WINDOW', '128000'))  # Total token window for the model
+    AI_MAX_TOKENS = int(os.getenv('AI_MAX_TOKENS', '4000'))  # Max tokens for completion/output
     
     # Ollama Configuration
     OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
