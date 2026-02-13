@@ -29,7 +29,7 @@ class OpenAIProvider(AIProvider):
     
     def __init__(self, config: Config):
         self.config = config
-        self.api_key = config.AI_API_KEY or None  # Convert empty string to None
+        self.api_key = config.AI_API_KEY if config.AI_API_KEY else None  # Convert empty string to None
         self.api_url = config.AI_API_URL
         self.model = config.AI_MODEL
         
@@ -84,7 +84,7 @@ class AzureOpenAIProvider(AIProvider):
     
     def __init__(self, config: Config):
         self.config = config
-        self.api_key = config.AI_API_KEY or None  # Convert empty string to None
+        self.api_key = config.AI_API_KEY if config.AI_API_KEY else None  # Convert empty string to None
         self.endpoint = config.AZURE_OPENAI_ENDPOINT
         self.deployment = config.AZURE_OPENAI_DEPLOYMENT
         self.api_version = config.AZURE_OPENAI_API_VERSION
@@ -207,7 +207,7 @@ class CustomProvider(AIProvider):
     
     def __init__(self, config: Config):
         self.config = config
-        self.api_key = config.AI_API_KEY or None  # Convert empty string to None
+        self.api_key = config.AI_API_KEY if config.AI_API_KEY else None  # Convert empty string to None
         self.api_url = config.AI_API_URL
         self.model = config.AI_MODEL
     
