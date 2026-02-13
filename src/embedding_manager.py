@@ -90,24 +90,33 @@ class EmbeddingProvider:
             logger.error(f"Endpoint: {endpoint}")
             logger.error(f"Model: {self.model}")
             
-            # Provide specific troubleshooting guidance
-            if response.status_code == 500 and "not implemented" in response.text.lower():
-                logger.error("⚠️  TROUBLESHOOTING: 'Method not implemented' error")
-                logger.error("   This usually means:")
-                logger.error(f"   1. The embedding model '{self.model}' is not loaded in your AI provider")
-                logger.error("   2. The embedding endpoint is not available")
-                logger.error("   3. The model name might be incorrect")
-                logger.error("")
-                logger.error("   For LocalAI:")
-                logger.error(f"   - Ensure '{self.model}' is downloaded and configured")
-                logger.error("   - Check LocalAI logs for model loading errors")
-                logger.error("   - Verify the model supports embeddings (not all models do)")
-                logger.error("   - Try a different model like 'all-MiniLM-L6-v2' or 'bert-cpp'")
-                logger.error("")
-                logger.error("   For Ollama (alternative):")
-                logger.error("   - Set EMBEDDING_PROVIDER=ollama")
-                logger.error("   - Set EMBEDDING_MODEL=nomic-embed-text (or all-minilm)")
-                logger.error("   - Ensure Ollama is running: ollama pull nomic-embed-text")
+            # Provide specific troubleshooting guidance based on error patterns
+            if response.status_code == 500:
+                # Check for common patterns indicating missing/unsupported model
+                error_text = response.text.lower()
+                if "not implemented" in error_text or "unimplemented" in error_text:
+                    logger.error("⚠️  TROUBLESHOOTING: 'Method not implemented' or 'Unimplemented' error")
+                    logger.error("   This usually means:")
+                    logger.error(f"   1. The embedding model '{self.model}' is not loaded in your AI provider")
+                    logger.error("   2. The embedding endpoint is not available")
+                    logger.error("   3. The model name might be incorrect")
+                    logger.error("")
+                    logger.error("   For LocalAI:")
+                    logger.error(f"   - Ensure '{self.model}' is downloaded and configured")
+                    logger.error("   - Check LocalAI logs for model loading errors")
+                    logger.error("   - Verify the model supports embeddings (not all models do)")
+                    logger.error("   - Try a different model like 'all-MiniLM-L6-v2' or 'bert-cpp'")
+                    logger.error("")
+                    logger.error("   For Ollama (alternative):")
+                    logger.error("   - Set EMBEDDING_PROVIDER=ollama")
+                    logger.error("   - Set EMBEDDING_MODEL=nomic-embed-text (or all-minilm)")
+                    logger.error("   - Ensure Ollama is running: ollama pull nomic-embed-text")
+                else:
+                    # Generic 500 error guidance
+                    logger.error("⚠️  TROUBLESHOOTING: Internal server error (500)")
+                    logger.error(f"   - Check the AI provider logs for detailed error information")
+                    logger.error(f"   - Verify the model '{self.model}' is correctly configured")
+                    logger.error(f"   - Ensure the embedding service is running properly")
             elif response.status_code == 404:
                 logger.error("⚠️  TROUBLESHOOTING: Endpoint not found")
                 logger.error(f"   - Verify your AI_API_URL is correct: {self.config.AI_API_URL}")
