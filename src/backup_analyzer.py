@@ -82,7 +82,7 @@ class UniFiBackupAnalyzer:
             logger.info(f"Grouped documents into {len(grouped_documents)} categories: {', '.join(grouped_documents.keys())}")
             
             # PHASE 1: Embed ALL documents into vector DB for RAG retrieval
-            # This is done upfront to save NVRAM - all embeddings complete before LLM processing
+            # This is done upfront to save VRAM - all embeddings complete before LLM processing
             if self.embedding_manager and self.embedding_manager.is_available():
                 logger.info("=== PHASE 1: Embedding ALL documents into vector database ===")
                 embed_docs = self._prepare_documents_for_embedding(document_files)

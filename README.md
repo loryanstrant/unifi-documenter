@@ -57,15 +57,15 @@ UniFi Documenter uses a two-stage **Retrieval-Augmented Generation (RAG)** pipel
                                                                └───────────────┘
 ```
 
-### Two-Phase Processing (NVRAM Optimized)
+### Two-Phase Processing (VRAM Optimized)
 
-The system uses a two-phase approach to minimize NVRAM usage:
+The system uses a two-phase approach to minimize VRAM usage:
 
 1. **Phase 1: Embedding** — ALL configuration documents are embedded first and stored in Qdrant. This completes before any LLM processing begins.
 2. **Phase 2: Generation** — After all embeddings are complete, the system retrieves relevant context from Qdrant and generates documentation using the LLM. An optional cooldown delay can be configured between LLM calls to reduce memory pressure.
 
 **Benefits:**
-- **Reduced NVRAM Usage**: Separating embedding and generation prevents memory spikes
+- **Reduced VRAM Usage**: Separating embedding and generation prevents memory spikes
 - **Better Stability**: Local models with limited VRAM (< 8GB) run more reliably
 - **Improved Quality**: Complete embedding context available before generation begins
 - **Configurable Cooldown**: Optional delay between LLM calls further reduces memory pressure
@@ -334,7 +334,7 @@ The system automatically calculates how much configuration data fits in the rema
 
 #### LLM Cooldown / Rate Limiting
 
-To reduce NVRAM pressure and prevent overloading local AI models, you can configure a cooldown delay between LLM generation calls:
+To reduce VRAM pressure and prevent overloading local AI models, you can configure a cooldown delay between LLM generation calls:
 
 ```bash
 # Delay (in seconds) between LLM generation requests
@@ -344,7 +344,7 @@ AI_COOLDOWN_SECONDS=3
 ```
 
 **Benefits:**
-- **Reduces NVRAM Usage**: Gives the GPU time to free memory between requests
+- **Reduces VRAM Usage**: Gives the GPU time to free memory between requests
 - **Prevents Throttling**: Avoids rate limits on API-based providers
 - **Improves Stability**: Reduces risk of OOM errors with local models
 - **Better Performance**: Allows system resources to recover between calls
