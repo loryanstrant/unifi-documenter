@@ -13,6 +13,8 @@ An intelligent Docker-based solution for automatically backing up, analyzing, an
 ### Core Capabilities
 - 🔄 **Automated Scheduling**: Daily, weekly, or monthly backup processing
 - 🤖 **AI-Powered Analysis**: Support for OpenAI, Azure OpenAI, Ollama, and custom APIs
+- 🔑 **Flexible Authentication**: Optional API keys for local services, managed identities, and unauthenticated endpoints
+- 🔍 **Enhanced Error Logging**: Detailed diagnostic information with URLs, error types, and troubleshooting hints
 - 📚 **Smart Batch Processing**: Intelligent document grouping with 20x performance improvement
 - 🐳 **Docker-Ready**: Complete containerized solution with multi-platform support (amd64/arm64)
 - 🌍 **Timezone Support**: Configurable scheduling with timezone awareness
@@ -59,8 +61,14 @@ Edit the `.env` file with your specific settings:
 UDM_IP=192.168.1.1
 UDM_ROOT_PASSWORD=your_password_here
 
-# AI Configuration (choose one)
+# AI Configuration (choose one provider)
 AI_PROVIDER=openai
+
+# API keys are now OPTIONAL - useful for:
+# - Local Ollama (no API key needed)
+# - OpenAI-compatible local endpoints (LM Studio, LocalAI)
+# - Azure Managed Identity authentication
+# - Network-level authentication
 AI_API_KEY=your_openai_api_key_here
 
 # Output Configuration
@@ -163,25 +171,29 @@ SCHEDULE_DAY_OF_MONTH=1
 #### OpenAI
 ```bash
 AI_PROVIDER=openai
-AI_API_KEY=sk-...
+AI_API_KEY=sk-...          # Optional - can be omitted for local endpoints
+AI_API_URL=https://api.openai.com/v1  # Optional - defaults to OpenAI
 AI_MODEL=gpt-4o-mini
 ```
 
 #### Azure OpenAI
 ```bash
-AI_PROVIDER=azure
+AI_PROVIDER=azure-openai
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
-AZURE_OPENAI_API_KEY=your_key
 AZURE_OPENAI_DEPLOYMENT=gpt-4
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
+AZURE_OPENAI_API_VERSION=2024-02-01
+AI_API_KEY=your_key        # Optional - can use managed identity
 ```
 
-#### Ollama (Local AI)
+**Azure Managed Identity**: Omit `AI_API_KEY` to use Azure Managed Identity authentication for secure, keyless access.
+
+#### Ollama (Local AI - No API Key Required)
 ```bash
 AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-AI_MODEL=qwen2.5:32b
+OLLAMA_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=qwen2.5:32b
 
+# No API key needed - runs completely local
 # Recommended models for documentation:
 # - qwen2.5:32b (Best quality, slower)
 # - llama3.1:8b (Good balance)
@@ -191,10 +203,64 @@ AI_MODEL=qwen2.5:32b
 #### Custom OpenAI-Compatible API
 ```bash
 AI_PROVIDER=custom
-CUSTOM_API_BASE_URL=https://your-api.com/v1
-CUSTOM_API_KEY=your_key
+AI_API_URL=https://your-api.com/v1
 AI_MODEL=your-model
+AI_API_KEY=your_key        # Optional - omit if endpoint doesn't require auth
+
+# Works with:
+# - LM Studio (http://localhost:1234/v1)
+# - LocalAI (http://localhost:8080/v1)
+# - vLLM (http://localhost:8000/v1)
+# - Any OpenAI-compatible endpoint
 ```
+
+### Authentication Options
+
+API keys are now **optional** for all providers, enabling:
+
+1. **Local Services**: Run Ollama or other local models without any API keys
+2. **Network Authentication**: Use internal APIs with network-level authentication
+3. **Managed Identity**: Azure resources can authenticate without storing keys
+4. **Development/Testing**: Test configurations safely without real API keys
+5. **OpenAI-Compatible Endpoints**: Use LM Studio, LocalAI, or similar local services
+
+## 🔍 Enhanced Error Logging
+
+The application now provides detailed diagnostic information for troubleshooting AI provider issues:
+
+### What's Logged
+
+**Connection Issues:**
+```
+ERROR - Ollama provider unavailable: Connection error to http://localhost:11434
+ERROR - Required: OLLAMA_URL (current: http://localhost:11434), OLLAMA_MODEL (current: llama3)
+ERROR - Ensure Ollama is running and accessible at the configured URL
+```
+
+**Configuration Problems:**
+```
+ERROR - AI provider 'custom' is not available
+ERROR - Required: AI_API_URL (current: https://api.example.com/v1), AI_MODEL (current: gpt-4)
+ERROR - Optional: AI_API_KEY (configured: No)
+```
+
+**API Errors:**
+```
+ERROR - OpenAI API error: Invalid API key
+ERROR - API URL: https://api.openai.com/v1
+ERROR - Model: gpt-4o-mini
+ERROR - Error type: AuthenticationError
+```
+
+### Benefits
+
+- **Exact URLs and Endpoints**: See exactly which endpoints are being accessed
+- **Current Configuration Values**: View your actual configuration without revealing secrets
+- **Error Type Classification**: Understand if it's a connection, authentication, or API issue
+- **Provider-Specific Hints**: Get tailored troubleshooting advice for your AI provider
+- **HTTP Response Details**: See status codes and response bodies for API failures
+
+This makes troubleshooting much easier without needing to modify code or add debug statements.
 
 ## 📊 Performance
 
@@ -348,11 +414,42 @@ docker-compose port unifi-documenter 8080
 # Verify UDM connection
 ssh root@${UDM_IP} 'ls -la /data/autobackup/'
 
-# Check AI provider
-docker-compose exec unifi-documenter python -m src.ai_documenter test
-
-# Review logs
+# Review logs for detailed error information
 docker-compose logs | grep ERROR
+
+# The enhanced error logging will show:
+# - Exact URLs and endpoints being accessed
+# - Current configuration values
+# - Specific error types (ConnectionError, AuthenticationError, etc.)
+# - Provider-specific troubleshooting hints
+```
+
+**AI Provider Issues:**
+
+The application now provides detailed diagnostics. Check logs for:
+
+1. **Configuration Problems**: Missing or incorrect API URLs, endpoints, or models
+   - Look for: "Required: AI_API_URL (current: ...)"
+   - Look for: "Optional: AI_API_KEY (configured: Yes/No)"
+
+2. **Connection Errors**: Network issues or wrong URLs
+   - Look for: "Connection error to http://localhost:11434"
+   - Verify the endpoint is accessible from within the Docker container
+
+3. **Authentication Failures**: Invalid or missing API keys (when required)
+   - Look for: "Error type: AuthenticationError"
+   - Verify API key is correct and has necessary permissions
+
+4. **API Errors**: Service-specific issues
+   - Look for HTTP status codes and response bodies
+   - Check provider's status page for outages
+
+**Example Error Messages:**
+```
+ERROR - AI provider 'ollama' is not available
+ERROR - Required: OLLAMA_URL (current: http://localhost:11434), OLLAMA_MODEL (current: llama3)
+ERROR - Ensure Ollama is running and accessible at the configured URL
+DEBUG - Ollama provider unavailable: Connection error to http://localhost:11434 - [Errno 111] Connection refused
 ```
 
 **Large files truncated:**
