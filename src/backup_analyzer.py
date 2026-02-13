@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 import hashlib
 
 from .config import Config
-from .ai_integration import AIManager
+from .ai_integration import AIManager, RetryableAIError
 from .utils import log_execution_time
 from .web_server import progress_tracker
 from .html_generator import generate_batch_html, convert_markdown_to_html
@@ -104,6 +104,8 @@ class UniFiBackupAnalyzer:
                 logger.info(f"LLM cooldown enabled: {self.config.AI_COOLDOWN_SECONDS} seconds between requests")
             
             llm_call_count = 0
+            max_retries = 5
+            retry_delay = 60
             
             # Process each group in batches
             for doc_type, files in grouped_documents.items():
@@ -127,7 +129,30 @@ class UniFiBackupAnalyzer:
                         logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown between LLM calls")
                         time.sleep(self.config.AI_COOLDOWN_SECONDS)
                     
-                    batch_results = self._process_batch(doc_type, batch_files, analysis_dir)
+                    # Retry loop – stay on the current batch until it succeeds
+                    # or retries are exhausted.
+                    batch_results = []
+                    for attempt in range(max_retries + 1):
+                        try:
+                            batch_results = self._process_batch(doc_type, batch_files, analysis_dir)
+                            break  # Success (or non-retryable failure)
+                        except RetryableAIError as e:
+                            if attempt < max_retries:
+                                logger.warning(
+                                    f"Model loading error on {doc_type} batch "
+                                    f"{batch_num}/{total_batches} "
+                                    f"(attempt {attempt + 1}/{max_retries}): {e}"
+                                )
+                                logger.warning(
+                                    f"Waiting {retry_delay} seconds before retrying..."
+                                )
+                                time.sleep(retry_delay)
+                            else:
+                                logger.error(
+                                    f"Failed {doc_type} batch {batch_num}/{total_batches} "
+                                    f"after {max_retries} retries, skipping batch"
+                                )
+
                     analyzed_documents.extend(batch_results)
                     llm_call_count += 1
             
@@ -427,6 +452,8 @@ class UniFiBackupAnalyzer:
             logger.info(f"Successfully processed batch of {len(results)} {doc_type} documents")
             return results
             
+        except RetryableAIError:
+            raise
         except Exception as e:
             logger.error(f"Failed to process batch for {doc_type}: {str(e)}")
             return []

@@ -7,10 +7,12 @@ to provide relevant context to the LLM for higher-quality documentation.
 import json
 import logging
 import hashlib
+import time
 import requests
 from typing import Dict, List, Optional
 
 from .config import Config
+from .ai_integration import RetryableAIError, _is_retryable_error
 
 logger = logging.getLogger('unifi_documenter')
 
@@ -22,9 +24,29 @@ class EmbeddingProvider:
         self.config = config
         self.provider = config.EMBEDDING_PROVIDER.lower()
         self.model = config.EMBEDDING_MODEL
+        self.context_window = config.EMBEDDING_CONTEXT_WINDOW
+
+    def _truncate_text(self, text: str) -> str:
+        """Truncate text to fit within the embedding model's context window.
+
+        Uses a rough estimate of 4 characters per token and leaves a 5%
+        safety margin to avoid exceeding the limit.
+        """
+        chars_per_token = 4
+        # Leave a 5 % buffer so we stay safely under the limit
+        max_tokens = int(self.context_window * 0.95)
+        max_chars = max_tokens * chars_per_token
+        if len(text) > max_chars:
+            logger.debug(
+                f"Truncating embedding text from {len(text)} to {max_chars} chars "
+                f"(context_window={self.context_window} tokens)"
+            )
+            text = text[:max_chars]
+        return text
 
     def generate_embedding(self, text: str) -> Optional[List[float]]:
         """Generate an embedding vector for the given text."""
+        text = self._truncate_text(text)
         if self.provider == 'ollama':
             return self._ollama_embedding(text)
         elif self.provider == 'openai':
@@ -49,9 +71,16 @@ class EmbeddingProvider:
                 f"Ollama embedding error - Status: {response.status_code}, "
                 f"Response: {response.text}"
             )
+            if response.status_code == 500 and _is_retryable_error(response.text):
+                raise RetryableAIError(response.text)
             return None
+        except RetryableAIError:
+            raise
         except Exception as e:
+            error_str = str(e)
             logger.error(f"Ollama embedding error: {type(e).__name__} - {e}")
+            if _is_retryable_error(error_str):
+                raise RetryableAIError(error_str) from e
             return None
 
     def _openai_embedding(self, text: str) -> Optional[List[float]]:
@@ -123,11 +152,20 @@ class EmbeddingProvider:
                 logger.error("   - For LocalAI, ensure it's running and accessible")
                 logger.error("   - Check if the service requires a different base URL or path")
             
+            # Raise retryable error for model loading failures
+            if response.status_code == 500 and _is_retryable_error(response.text):
+                raise RetryableAIError(response.text)
+            
             return None
+        except RetryableAIError:
+            raise
         except Exception as e:
+            error_str = str(e)
             logger.error(f"{label} embedding error: {type(e).__name__} - {e}")
             logger.error(f"Endpoint: {self.config.AI_API_URL}/embeddings")
             logger.error(f"Model: {self.model}")
+            if _is_retryable_error(error_str):
+                raise RetryableAIError(error_str) from e
             return None
 
     def is_available(self) -> bool:
@@ -181,12 +219,33 @@ class EmbeddingManager:
         if not self._ensure_collection():
             return 0
 
+        max_retries = 5
+        retry_delay = 60
+
         points = []
         for doc in documents:
             text = doc.get("text", "")
             if not text:
                 continue
-            embedding = self.embedding_provider.generate_embedding(text)
+
+            embedding = None
+            for attempt in range(max_retries + 1):
+                try:
+                    embedding = self.embedding_provider.generate_embedding(text)
+                    break  # Success or non-retryable failure
+                except RetryableAIError as e:
+                    if attempt < max_retries:
+                        logger.warning(
+                            f"Embedding model loading error (attempt {attempt + 1}/{max_retries}): {e}"
+                        )
+                        logger.warning(f"Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                    else:
+                        logger.error(
+                            f"Embedding failed after {max_retries} retries, skipping document"
+                        )
+                        embedding = None
+
             if embedding is None:
                 logger.warning("Failed to generate embedding, skipping document")
                 continue
