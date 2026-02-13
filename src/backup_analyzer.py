@@ -129,7 +129,7 @@ class UniFiBackupAnalyzer:
                         logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown between LLM calls")
                         time.sleep(self.config.AI_COOLDOWN_SECONDS)
                     
-                    # Retry loop – stay on the current batch until it succeeds
+                    # Retry loop - stay on the current batch until it succeeds
                     # or retries are exhausted.
                     batch_results = []
                     for attempt in range(max_retries + 1):

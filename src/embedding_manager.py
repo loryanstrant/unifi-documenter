@@ -33,7 +33,7 @@ class EmbeddingProvider:
         safety margin to avoid exceeding the limit.
         """
         chars_per_token = 4
-        # Leave a 5 % buffer so we stay safely under the limit
+        # Use 95% of the context window as a safety margin
         max_tokens = int(self.context_window * 0.95)
         max_chars = max_tokens * chars_per_token
         if len(text) > max_chars:
