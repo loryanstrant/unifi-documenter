@@ -57,17 +57,17 @@ class Config:
             'UDM_ROOT_PASSWORD': cls.UDM_ROOT_PASSWORD,
         }
         
-        # Validate AI configuration based on provider
-        if cls.AI_PROVIDER == 'openai':
-            required_fields['AI_API_KEY'] = cls.AI_API_KEY
-        elif cls.AI_PROVIDER == 'azure-openai':
+        # Validate AI configuration based on provider (API keys are now optional)
+        if cls.AI_PROVIDER == 'azure-openai':
+            # Azure still requires endpoint and deployment, but API key is optional
             required_fields.update({
                 'AZURE_OPENAI_ENDPOINT': cls.AZURE_OPENAI_ENDPOINT,
                 'AZURE_OPENAI_DEPLOYMENT': cls.AZURE_OPENAI_DEPLOYMENT,
-                'AI_API_KEY': cls.AI_API_KEY,
             })
         elif cls.AI_PROVIDER == 'ollama':
             required_fields['OLLAMA_URL'] = cls.OLLAMA_URL
+        # OpenAI and custom providers don't require any additional fields now
+        # API keys are optional for all providers
         
         missing_fields = [field for field, value in required_fields.items() if not value]
         
