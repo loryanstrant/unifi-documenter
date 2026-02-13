@@ -4,6 +4,7 @@ UniFi Backup Analyzer - processes backup data and generates documentation
 import json
 import os
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -80,12 +81,14 @@ class UniFiBackupAnalyzer:
             
             logger.info(f"Grouped documents into {len(grouped_documents)} categories: {', '.join(grouped_documents.keys())}")
             
-            # Embed documents into vector DB for RAG retrieval
+            # PHASE 1: Embed ALL documents into vector DB for RAG retrieval
+            # This is done upfront to save VRAM - all embeddings complete before LLM processing
             if self.embedding_manager and self.embedding_manager.is_available():
-                logger.info("Embedding documents into vector database for RAG retrieval...")
+                logger.info("=== PHASE 1: Embedding ALL documents into vector database ===")
                 embed_docs = self._prepare_documents_for_embedding(document_files)
                 embedded_count = self.embedding_manager.embed_documents(embed_docs)
                 logger.info(f"Embedded {embedded_count}/{len(embed_docs)} documents into vector database")
+                logger.info("=== Embedding phase complete, proceeding to LLM generation ===")
             elif self.config.EMBEDDING_ENABLED:
                 logger.warning(
                     "Embedding is enabled but the embedding provider or Qdrant "
@@ -94,6 +97,13 @@ class UniFiBackupAnalyzer:
             
             # Start job tracking
             progress_tracker.start_job(job_id, len(document_files), grouped_documents)
+            
+            # PHASE 2: Process each group with LLM (with optional cooldown between calls)
+            logger.info("=== PHASE 2: Generating documentation with LLM ===")
+            if self.config.AI_COOLDOWN_SECONDS > 0:
+                logger.info(f"LLM cooldown enabled: {self.config.AI_COOLDOWN_SECONDS} seconds between requests")
+            
+            llm_call_count = 0
             
             # Process each group in batches
             for doc_type, files in grouped_documents.items():
@@ -112,11 +122,24 @@ class UniFiBackupAnalyzer:
                         progress_tracker.update_group(doc_type, total_batches)
                     progress_tracker.update_batch(batch_num, len(batch_files))
                     
+                    # Apply cooldown after previous LLM call, before current call (skip first call)
+                    if llm_call_count > 0 and self.config.AI_COOLDOWN_SECONDS > 0:
+                        logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown between LLM calls")
+                        time.sleep(self.config.AI_COOLDOWN_SECONDS)
+                    
                     batch_results = self._process_batch(doc_type, batch_files, analysis_dir)
                     analyzed_documents.extend(batch_results)
+                    llm_call_count += 1
+            
+            # Apply cooldown between batch processing and summary generation
+            if llm_call_count > 0 and self.config.AI_COOLDOWN_SECONDS > 0:
+                logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown before summary generation")
+                time.sleep(self.config.AI_COOLDOWN_SECONDS)
             
             # Generate summary analysis
             summary = self._generate_summary_analysis(analyzed_documents, analysis_dir)
+            llm_call_count += 1  # Count the summary generation
+            logger.info(f"Generated documentation for {len(analyzed_documents)} documents using {llm_call_count} LLM calls")
             
             # Create master index
             index = self._create_documentation_index(analyzed_documents, summary, analysis_dir)

@@ -68,22 +68,66 @@ class EmbeddingProvider:
             headers = {"Content-Type": "application/json"}
             if self.config.AI_API_KEY:
                 headers["Authorization"] = f"Bearer {self.config.AI_API_KEY}"
+            
+            endpoint = f"{self.config.AI_API_URL}/embeddings"
+            payload = {"model": self.model, "input": text}
+            
             response = requests.post(
-                f"{self.config.AI_API_URL}/embeddings",
+                endpoint,
                 headers=headers,
                 # OpenAI-compatible APIs use "input" (vs Ollama's "prompt")
-                json={"model": self.model, "input": text},
+                json=payload,
                 timeout=120,
             )
             if response.status_code == 200:
                 return response.json()["data"][0]["embedding"]
+            
+            # Enhanced error logging with troubleshooting guidance
             logger.error(
                 f"{label} embedding error - Status: {response.status_code}, "
                 f"Response: {response.text}"
             )
+            logger.error(f"Endpoint: {endpoint}")
+            logger.error(f"Model: {self.model}")
+            
+            # Provide specific troubleshooting guidance based on error patterns
+            if response.status_code == 500:
+                # Check for common patterns indicating missing/unsupported model
+                error_text = response.text.lower()
+                if "not implemented" in error_text or "unimplemented" in error_text:
+                    logger.error("⚠️  TROUBLESHOOTING: 'Method not implemented' or 'Unimplemented' error")
+                    logger.error("   This usually means:")
+                    logger.error(f"   1. The embedding model '{self.model}' is not loaded in your AI provider")
+                    logger.error("   2. The embedding endpoint is not available")
+                    logger.error("   3. The model name might be incorrect")
+                    logger.error("")
+                    logger.error("   For LocalAI:")
+                    logger.error(f"   - Ensure '{self.model}' is downloaded and configured")
+                    logger.error("   - Check LocalAI logs for model loading errors")
+                    logger.error("   - Verify the model supports embeddings (not all models do)")
+                    logger.error("   - Try a different model like 'all-MiniLM-L6-v2' or 'bert-cpp'")
+                    logger.error("")
+                    logger.error("   For Ollama (alternative):")
+                    logger.error("   - Set EMBEDDING_PROVIDER=ollama")
+                    logger.error("   - Set EMBEDDING_MODEL=nomic-embed-text (or all-minilm)")
+                    logger.error("   - Ensure Ollama is running: ollama pull nomic-embed-text")
+                else:
+                    # Generic 500 error guidance
+                    logger.error("⚠️  TROUBLESHOOTING: Internal server error (500)")
+                    logger.error(f"   - Check the AI provider logs for detailed error information")
+                    logger.error(f"   - Verify the model '{self.model}' is correctly configured")
+                    logger.error(f"   - Ensure the embedding service is running properly")
+            elif response.status_code == 404:
+                logger.error("⚠️  TROUBLESHOOTING: Endpoint not found")
+                logger.error(f"   - Verify your AI_API_URL is correct: {self.config.AI_API_URL}")
+                logger.error("   - For LocalAI, ensure it's running and accessible")
+                logger.error("   - Check if the service requires a different base URL or path")
+            
             return None
         except Exception as e:
             logger.error(f"{label} embedding error: {type(e).__name__} - {e}")
+            logger.error(f"Endpoint: {self.config.AI_API_URL}/embeddings")
+            logger.error(f"Model: {self.model}")
             return None
 
     def is_available(self) -> bool:
