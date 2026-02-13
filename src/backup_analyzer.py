@@ -14,6 +14,7 @@ from .ai_integration import AIManager
 from .utils import log_execution_time
 from .web_server import progress_tracker
 from .html_generator import generate_batch_html, convert_markdown_to_html
+from .embedding_manager import EmbeddingManager
 
 logger = logging.getLogger('unifi_documenter')
 
@@ -23,6 +24,31 @@ class UniFiBackupAnalyzer:
     def __init__(self, config: Config):
         self.config = config
         self.ai_manager = AIManager(config)
+        self.embedding_manager = None
+        if config.EMBEDDING_ENABLED:
+            self.embedding_manager = EmbeddingManager(config)
+
+    def _prepare_documents_for_embedding(self, document_files: List[str]) -> List[Dict]:
+        """Prepare document files for embedding into the vector database."""
+        docs = []
+        for file_path in document_files:
+            try:
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                text = json.dumps(data, indent=2)
+                # Truncate very large documents to keep embeddings meaningful
+                if len(text) > self.config.MAX_DOCUMENT_SIZE:
+                    text = text[:self.config.MAX_DOCUMENT_SIZE]
+                docs.append({
+                    "text": text,
+                    "metadata": {
+                        "source_file": os.path.basename(file_path),
+                        "keys": list(data.keys()) if isinstance(data, dict) else [],
+                    },
+                })
+            except Exception as e:
+                logger.warning(f"Failed to prepare {file_path} for embedding: {e}")
+        return docs
         
     @log_execution_time
     def analyze_backup_data(self, backup_result: Dict) -> Optional[Dict]:
@@ -53,6 +79,18 @@ class UniFiBackupAnalyzer:
             grouped_documents = self._group_documents_by_type(document_files)
             
             logger.info(f"Grouped documents into {len(grouped_documents)} categories: {', '.join(grouped_documents.keys())}")
+            
+            # Embed documents into vector DB for RAG retrieval
+            if self.embedding_manager and self.embedding_manager.is_available():
+                logger.info("Embedding documents into vector database for RAG retrieval...")
+                embed_docs = self._prepare_documents_for_embedding(document_files)
+                embedded_count = self.embedding_manager.embed_documents(embed_docs)
+                logger.info(f"Embedded {embedded_count}/{len(embed_docs)} documents into vector database")
+            elif self.config.EMBEDDING_ENABLED:
+                logger.warning(
+                    "Embedding is enabled but the embedding provider or Qdrant "
+                    "is not available. Falling back to direct LLM analysis."
+                )
             
             # Start job tracking
             progress_tracker.start_job(job_id, len(document_files), grouped_documents)
@@ -253,7 +291,20 @@ class UniFiBackupAnalyzer:
                 'documents': documents
             }
             
+            # Retrieve related context from vector DB when available
+            rag_context = ""
+            if self.embedding_manager and self.embedding_manager.is_available():
+                query = f"UniFi {doc_type} configuration"
+                related = self.embedding_manager.retrieve_context(query)
+                if related:
+                    rag_context = "\n\n### Related Configuration Context (from vector DB)\n"
+                    for i, hit in enumerate(related, 1):
+                        snippet = hit["text"][:500]
+                        rag_context += f"\n**[{i}]** (score {hit['score']:.2f}):\n```json\n{snippet}\n```\n"
+
             context = f"UniFi {doc_type.title()} Configuration Batch ({len(documents)} items)"
+            if rag_context:
+                context += rag_context
             batch_documentation = self.ai_manager.generate_documentation(batch_data, context)
             
             if not batch_documentation:

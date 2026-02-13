@@ -7,3 +7,4 @@ pytz==2023.3
 python-dotenv==1.0.0
 pymongo==4.6.3
 Flask==3.0.0
+qdrant-client==1.12.1

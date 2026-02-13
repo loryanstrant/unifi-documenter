@@ -4,7 +4,7 @@
 [![Docker Pulls](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/loryanstrant/unifi-documenter/pkgs/container/unifi-documenter)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-An intelligent Docker-based solution for automatically backing up, analyzing, and documenting UniFi Dream Machine configurations using AI. This tool creates human-readable documentation with a modern web interface for real-time monitoring.
+An intelligent Docker-based solution for automatically backing up, analyzing, and documenting UniFi Dream Machine configurations using AI. This tool uses a **Retrieval-Augmented Generation (RAG)** pipeline — embedding your configuration data into a Qdrant vector database first, then retrieving the most relevant context before generating documentation with an LLM — delivering higher-quality, more accurate results with a modern web interface for real-time monitoring.
 
 ![UniFi Documenter Dashboard](docs/dashboard-screenshot.png)
 
@@ -12,6 +12,8 @@ An intelligent Docker-based solution for automatically backing up, analyzing, an
 
 ### Core Capabilities
 - 🔄 **Automated Scheduling**: Daily, weekly, or monthly backup processing
+- 🧠 **RAG Pipeline**: Embedding-first retrieval-augmented generation for accurate, context-aware documentation
+- 🗄️ **Vector Database**: Qdrant-backed storage for fast semantic search across configurations
 - 🤖 **AI-Powered Analysis**: Support for OpenAI, Azure OpenAI, Ollama, and custom APIs
 - 🔑 **Flexible Authentication**: Optional API keys for local services, managed identities, and unauthenticated endpoints
 - 🔍 **Enhanced Error Logging**: Detailed diagnostic information with URLs, error types, and troubleshooting hints
@@ -31,6 +33,68 @@ An intelligent Docker-based solution for automatically backing up, analyzing, an
 ### Output Formats
 - **HTML** (New!): Professional, styled documentation with syntax highlighting and responsive design
 - **Markdown**: Traditional RAG-optimized markdown for search and analysis systems
+
+## 🧠 RAG Architecture
+
+UniFi Documenter uses a two-stage **Retrieval-Augmented Generation (RAG)** pipeline:
+
+```
+┌─────────────┐     ┌──────────────┐     ┌────────────────┐
+│  UniFi       │────▶│  Embedding   │────▶│  Qdrant Vector │
+│  Backup Data │     │  Model       │     │  Database      │
+└─────────────┘     └──────────────┘     └───────┬────────┘
+                                                  │ retrieve
+                                                  ▼
+                                          ┌───────────────┐     ┌──────────────┐
+                                          │  Relevant     │────▶│  LLM         │
+                                          │  Context      │     │  Generation  │
+                                          └───────────────┘     └──────┬───────┘
+                                                                       │
+                                                                       ▼
+                                                               ┌───────────────┐
+                                                               │  Documentation│
+                                                               │  (HTML / MD)  │
+                                                               └───────────────┘
+```
+
+1. **Embed** — Each configuration document is converted into a vector embedding and stored in Qdrant.
+2. **Retrieve** — When generating documentation for a batch, the system queries Qdrant for the most semantically similar existing configurations to provide cross-reference context.
+3. **Generate** — The LLM receives both the raw configuration data *and* the retrieved context, producing richer, more accurate documentation.
+
+This approach significantly improves documentation quality because the LLM can reference related configurations (e.g., a firewall rule that references a VLAN) even when they are in different batches.
+
+### Recommended Models (VRAM-Conscious)
+
+Choose models based on available system resources. The table below lists options from smallest to largest.
+
+#### Embedding Models
+
+| Provider | Model | VRAM | Notes |
+|----------|-------|------|-------|
+| **Ollama** | `all-minilm` | ~45 MB | Fastest, good for limited hardware |
+| **Ollama** | `nomic-embed-text` | ~274 MB | Best quality-to-size ratio *(default)* |
+| **Ollama** | `mxbai-embed-large` | ~670 MB | Highest local quality |
+| **LocalAI** | `bert-cpp` | ~100 MB | Lightweight C++ implementation |
+| **LocalAI** | `all-MiniLM-L6-v2` | ~90 MB | Popular sentence-transformer |
+| **OpenAI** | `text-embedding-3-small` | Cloud | Best quality, requires API key |
+| **OpenAI** | `text-embedding-3-large` | Cloud | Highest dimension embeddings |
+
+#### LLM Models (for Generation)
+
+| Provider | Model | VRAM | Notes |
+|----------|-------|------|-------|
+| **Ollama** | `gemma2:2b` | ~1.6 GB | Ultra-light, quick responses |
+| **Ollama** | `phi3.5:latest` | ~2.2 GB | Good balance for small hardware |
+| **Ollama** | `llama3.1:8b` | ~4.7 GB | Strong general quality |
+| **Ollama** | `qwen2.5:7b` | ~4.4 GB | Excellent for structured data |
+| **Ollama** | `qwen2.5:32b` | ~18 GB | Best local quality, needs GPU |
+| **LocalAI** | `phi-2` | ~1.8 GB | Small and fast |
+| **LocalAI** | `llama3-8b-instruct` | ~4.7 GB | Good instruction following |
+| **LocalAI** | `mistral-7b-instruct` | ~4.1 GB | Popular open-source choice |
+| **OpenAI** | `gpt-4o-mini` | Cloud | Best cloud quality-to-cost ratio |
+| **OpenAI** | `gpt-4o` | Cloud | Highest cloud quality |
+
+> **Tip:** For a fully local setup on 8 GB VRAM, use `nomic-embed-text` for embeddings and `phi3.5:latest` or `llama3.1:8b` for generation.
 
 ## 🚀 Quick Start
 
@@ -200,6 +264,27 @@ OLLAMA_MODEL=qwen2.5:32b
 # - phi3.5:latest (Fastest, smaller)
 ```
 
+#### Embedding / RAG Configuration
+```bash
+# Enable RAG pipeline (default: true)
+EMBEDDING_ENABLED=true
+
+# Embedding provider: ollama, openai, custom
+EMBEDDING_PROVIDER=ollama
+
+# Embedding model (see model recommendation table above)
+EMBEDDING_MODEL=nomic-embed-text
+
+# Qdrant connection (auto-configured via docker-compose)
+QDRANT_URL=http://qdrant:6333
+
+# Collection name for vector storage
+EMBEDDING_COLLECTION=unifi_configs
+
+# Number of related documents to retrieve per query
+EMBEDDING_TOP_K=5
+```
+
 #### Custom OpenAI-Compatible API
 ```bash
 AI_PROVIDER=custom
@@ -323,6 +408,7 @@ unifi-documenter/
 ├── logs/             # Application logs
 ├── src/              # Source code
 │   ├── backup_analyzer.py    # Core analysis with batch processing
+│   ├── embedding_manager.py  # RAG embedding pipeline & Qdrant integration
 │   ├── web_server.py         # Flask web interface
 │   ├── html_generator.py     # HTML output generation
 │   ├── markdown_generator.py # Markdown output generation
@@ -461,8 +547,9 @@ DEBUG - Ollama provider unavailable: Connection error to http://localhost:11434 
 
 ### Recommended Resources
 - **CPU**: 2 cores minimum
-- **RAM**: 2GB minimum
-- **Disk**: 1GB + space for output files
+- **RAM**: 2GB minimum (4GB+ recommended with local models)
+- **VRAM**: Depends on chosen models (see [model table](#recommended-models-vram-conscious))
+- **Disk**: 1GB + space for output files + Qdrant storage
 - **Network**: Stable connection to UDM and AI provider
 
 ### Container Limits
@@ -502,8 +589,9 @@ To report security vulnerabilities, please email security@yourdomain.com instead
 
 ## 🙏 Acknowledgments
 
-- Built with Python, Flask, and Docker
+- Built with Python, Flask, Qdrant, and Docker
 - AI documentation powered by OpenAI, Azure, and Ollama
+- RAG pipeline using Qdrant vector database for semantic search
 - Inspired by the UniFi community's need for better documentation tools
 
 ---

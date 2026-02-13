@@ -32,6 +32,14 @@ class Config:
     OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3')
     
+    # Embedding / RAG Configuration
+    EMBEDDING_ENABLED = os.getenv('EMBEDDING_ENABLED', 'true').lower() == 'true'
+    EMBEDDING_PROVIDER = os.getenv('EMBEDDING_PROVIDER', 'ollama')  # ollama, openai, custom
+    EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'nomic-embed-text')
+    QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
+    EMBEDDING_COLLECTION = os.getenv('EMBEDDING_COLLECTION', 'unifi_configs')
+    EMBEDDING_TOP_K = int(os.getenv('EMBEDDING_TOP_K', '5'))
+    
     # Azure OpenAI Configuration
     AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT', '')
     AZURE_OPENAI_API_VERSION = os.getenv('AZURE_OPENAI_API_VERSION', '2024-02-01')
