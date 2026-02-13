@@ -29,6 +29,9 @@ class UniFiBackupAnalyzer:
         """Analyze processed backup data and generate documentation"""
         if not self.ai_manager.is_available():
             logger.error("AI manager not available for analysis")
+            logger.error(f"AI Provider configured: {self.config.AI_PROVIDER}")
+            logger.error("Cannot generate documentation without a working AI provider")
+            logger.error("Review AI configuration in environment variables or .env file")
             return None
         
         try:
@@ -98,6 +101,10 @@ class UniFiBackupAnalyzer:
             
         except Exception as e:
             logger.error(f"Backup analysis failed: {str(e)}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"AI Provider: {self.config.AI_PROVIDER}")
+            import traceback
+            logger.debug(f"Stack trace: {traceback.format_exc()}")
             return None
     
     def _analyze_single_document(self, doc_file: str, output_dir: str) -> Optional[Dict]:

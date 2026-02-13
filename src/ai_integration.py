@@ -29,19 +29,21 @@ class OpenAIProvider(AIProvider):
     
     def __init__(self, config: Config):
         self.config = config
-        self.api_key = config.AI_API_KEY
+        self.api_key = config.AI_API_KEY if config.AI_API_KEY else None  # Convert empty string to None
         self.api_url = config.AI_API_URL
         self.model = config.AI_MODEL
         
         # Import openai here to avoid issues if not installed
         try:
             import openai
+            # OpenAI client accepts None for api_key
             self.client = openai.OpenAI(
                 api_key=self.api_key,
                 base_url=self.api_url
             )
-        except ImportError:
-            logger.error("OpenAI package not installed")
+        except ImportError as e:
+            logger.error(f"OpenAI package not installed: {str(e)}")
+            logger.error("Install with: pip install openai")
             self.client = None
     
     def generate_completion(self, prompt: str, max_tokens: int = 4000) -> Optional[str]:
@@ -64,31 +66,40 @@ class OpenAIProvider(AIProvider):
             
         except Exception as e:
             logger.error(f"OpenAI API error: {str(e)}")
+            logger.error(f"API URL: {self.api_url}")
+            logger.error(f"Model: {self.model}")
+            logger.error(f"Error type: {type(e).__name__}")
             return None
     
     def is_available(self) -> bool:
         """Check if OpenAI provider is available"""
-        return self.client is not None and bool(self.api_key)
+        # API key is now optional, only check if client is initialized
+        available = self.client is not None
+        if not available:
+            logger.debug("OpenAI provider unavailable: Client not initialized")
+        return available
 
 class AzureOpenAIProvider(AIProvider):
     """Azure OpenAI provider"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.api_key = config.AI_API_KEY
+        self.api_key = config.AI_API_KEY if config.AI_API_KEY else None  # Convert empty string to None
         self.endpoint = config.AZURE_OPENAI_ENDPOINT
         self.deployment = config.AZURE_OPENAI_DEPLOYMENT
         self.api_version = config.AZURE_OPENAI_API_VERSION
         
         try:
             import openai
+            # Azure OpenAI client accepts None for api_key
             self.client = openai.AzureOpenAI(
                 api_key=self.api_key,
                 api_version=self.api_version,
                 azure_endpoint=self.endpoint
             )
-        except ImportError:
-            logger.error("OpenAI package not installed")
+        except ImportError as e:
+            logger.error(f"OpenAI package not installed: {str(e)}")
+            logger.error("Install with: pip install openai")
             self.client = None
     
     def generate_completion(self, prompt: str, max_tokens: int = 4000) -> Optional[str]:
@@ -111,11 +122,24 @@ class AzureOpenAIProvider(AIProvider):
             
         except Exception as e:
             logger.error(f"Azure OpenAI API error: {str(e)}")
+            logger.error(f"Azure Endpoint: {self.endpoint}")
+            logger.error(f"Deployment: {self.deployment}")
+            logger.error(f"API Version: {self.api_version}")
+            logger.error(f"Error type: {type(e).__name__}")
             return None
     
     def is_available(self) -> bool:
         """Check if Azure OpenAI provider is available"""
-        return self.client is not None and all([self.api_key, self.endpoint, self.deployment])
+        # API key is now optional, only check client, endpoint, and deployment
+        available = self.client is not None and all([self.endpoint, self.deployment])
+        if not available:
+            if self.client is None:
+                logger.debug("Azure OpenAI provider unavailable: Client not initialized")
+            elif not self.endpoint:
+                logger.debug("Azure OpenAI provider unavailable: Endpoint not configured")
+            elif not self.deployment:
+                logger.debug("Azure OpenAI provider unavailable: Deployment not configured")
+        return available
 
 class OllamaProvider(AIProvider):
     """Ollama local AI provider"""
@@ -146,19 +170,36 @@ class OllamaProvider(AIProvider):
                 result = response.json()
                 return result.get('response', '')
             else:
-                logger.error(f"Ollama API error: {response.status_code} - {response.text}")
+                logger.error(f"Ollama API error - Status: {response.status_code}")
+                logger.error(f"Ollama URL: {self.url}/api/generate")
+                logger.error(f"Model: {self.model}")
+                logger.error(f"Response: {response.text}")
                 return None
                 
         except Exception as e:
             logger.error(f"Ollama API error: {str(e)}")
+            logger.error(f"Ollama URL: {self.url}")
+            logger.error(f"Model: {self.model}")
+            logger.error(f"Error type: {type(e).__name__}")
             return None
     
     def is_available(self) -> bool:
         """Check if Ollama provider is available"""
         try:
             response = requests.get(f"{self.url}/api/tags", timeout=10)
-            return response.status_code == 200
-        except Exception:
+            if response.status_code == 200:
+                return True
+            else:
+                logger.debug(f"Ollama provider unavailable: HTTP {response.status_code} from {self.url}/api/tags")
+                return False
+        except requests.exceptions.ConnectionError as e:
+            logger.debug(f"Ollama provider unavailable: Connection error to {self.url} - {str(e)}")
+            return False
+        except requests.exceptions.Timeout:
+            logger.debug(f"Ollama provider unavailable: Timeout connecting to {self.url}")
+            return False
+        except Exception as e:
+            logger.debug(f"Ollama provider unavailable: {type(e).__name__} - {str(e)}")
             return False
 
 class CustomProvider(AIProvider):
@@ -166,7 +207,7 @@ class CustomProvider(AIProvider):
     
     def __init__(self, config: Config):
         self.config = config
-        self.api_key = config.AI_API_KEY
+        self.api_key = config.AI_API_KEY if config.AI_API_KEY else None  # Convert empty string to None
         self.api_url = config.AI_API_URL
         self.model = config.AI_MODEL
     
@@ -174,9 +215,12 @@ class CustomProvider(AIProvider):
         """Generate completion using custom OpenAI-compatible API"""
         try:
             headers = {
-                "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+            
+            # Only add Authorization header if API key is provided
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
             
             data = {
                 "model": self.model,
@@ -199,16 +243,26 @@ class CustomProvider(AIProvider):
                 result = response.json()
                 return result['choices'][0]['message']['content']
             else:
-                logger.error(f"Custom API error: {response.status_code} - {response.text}")
+                logger.error(f"Custom API error - Status: {response.status_code}")
+                logger.error(f"API URL: {self.api_url}/chat/completions")
+                logger.error(f"Model: {self.model}")
+                logger.error(f"Response: {response.text}")
                 return None
                 
         except Exception as e:
             logger.error(f"Custom API error: {str(e)}")
+            logger.error(f"API URL: {self.api_url}")
+            logger.error(f"Model: {self.model}")
+            logger.error(f"Error type: {type(e).__name__}")
             return None
     
     def is_available(self) -> bool:
         """Check if custom provider is available"""
-        return bool(self.api_key and self.api_url)
+        # API key is now optional, only check if URL is configured
+        available = bool(self.api_url)
+        if not available:
+            logger.debug("Custom provider unavailable: API URL not configured")
+        return available
 
 class AIManager:
     """Manages AI providers and handles AI-related operations"""
@@ -231,12 +285,31 @@ class AIManager:
         provider_class = providers.get(provider_type)
         if not provider_class:
             logger.error(f"Unknown AI provider: {provider_type}")
+            logger.error(f"Valid providers: {', '.join(providers.keys())}")
+            logger.error(f"Check AI_PROVIDER environment variable")
             return None
         
         provider = provider_class(self.config)
         
         if not provider.is_available():
-            logger.error(f"AI provider {provider_type} is not available")
+            logger.error(f"AI provider '{provider_type}' is not available")
+            logger.error(f"Configuration check failed - review the debug logs above for specific missing configuration")
+            
+            # Provide specific configuration hints based on provider type
+            if provider_type == 'openai':
+                logger.error(f"Required: AI_API_URL (current: {self.config.AI_API_URL}), AI_MODEL (current: {self.config.AI_MODEL})")
+                logger.error(f"Optional: AI_API_KEY (configured: {'Yes' if self.config.AI_API_KEY else 'No'})")
+            elif provider_type == 'azure-openai':
+                logger.error(f"Required: AZURE_OPENAI_ENDPOINT (current: {self.config.AZURE_OPENAI_ENDPOINT}), AZURE_OPENAI_DEPLOYMENT (current: {self.config.AZURE_OPENAI_DEPLOYMENT})")
+                logger.error(f"Optional: AI_API_KEY (configured: {'Yes' if self.config.AI_API_KEY else 'No'})")
+            elif provider_type == 'ollama':
+                logger.error(f"Required: OLLAMA_URL (current: {self.config.OLLAMA_URL}), OLLAMA_MODEL (current: {self.config.OLLAMA_MODEL})")
+                logger.error(f"Ensure Ollama is running and accessible at the configured URL")
+            elif provider_type == 'custom':
+                logger.error(f"Required: AI_API_URL (current: {self.config.AI_API_URL}), AI_MODEL (current: {self.config.AI_MODEL})")
+                logger.error(f"Optional: AI_API_KEY (configured: {'Yes' if self.config.AI_API_KEY else 'No'})")
+                logger.error(f"Ensure the custom API endpoint is OpenAI-compatible and accessible")
+            
             return None
         
         logger.info(f"Initialized AI provider: {provider_type}")
@@ -244,7 +317,13 @@ class AIManager:
     
     def is_available(self) -> bool:
         """Check if AI manager is ready to use"""
-        return self.provider is not None and self.provider.is_available()
+        available = self.provider is not None and self.provider.is_available()
+        if not available:
+            if self.provider is None:
+                logger.debug("AI manager unavailable: No provider initialized")
+            elif not self.provider.is_available():
+                logger.debug(f"AI manager unavailable: Provider '{self.config.AI_PROVIDER}' is not available")
+        return available
     
     def generate_documentation(self, data: Union[str, Dict], context: str = "") -> Optional[str]:
         """Generate documentation for the provided data"""
