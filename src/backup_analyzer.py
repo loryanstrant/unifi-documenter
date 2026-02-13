@@ -307,6 +307,8 @@ class UniFiBackupAnalyzer:
             max_tokens = self.config.AI_MAX_TOKENS if hasattr(self.config, 'AI_MAX_TOKENS') else 4000
             overhead_tokens = 160 + len(context) // chars_per_token
             available_data_tokens = context_window - max_tokens - overhead_tokens
+            if available_data_tokens < 0:
+                available_data_tokens = 0
             max_data_chars = max(available_data_tokens * chars_per_token, 200)
 
             # Build the batch data, truncating documents that exceed
@@ -324,11 +326,8 @@ class UniFiBackupAnalyzer:
                 for doc in documents:
                     doc_str = json.dumps(doc, indent=2)
                     if len(doc_str) > per_doc_budget:
-                        doc_str = doc_str[:per_doc_budget]
-                        try:
-                            truncated_docs.append(json.loads(doc_str + '}'))
-                        except json.JSONDecodeError:
-                            truncated_docs.append({"_truncated": doc_str})
+                        # Keep only the top-level keys that fit in the budget
+                        truncated_docs.append({"_truncated": doc_str[:per_doc_budget]})
                     else:
                         truncated_docs.append(doc)
                 batch_data = {

@@ -355,7 +355,7 @@ class AIManager:
                 available_data_tokens = 0
             max_data_chars = available_data_tokens * chars_per_token
 
-            # Also honour the legacy MAX_DOCUMENT_SIZE setting
+            # Also honor the legacy MAX_DOCUMENT_SIZE setting
             max_data_chars = min(max_data_chars, self.config.MAX_DOCUMENT_SIZE)
 
             if len(data_str) > max_data_chars:

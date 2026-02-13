@@ -317,7 +317,8 @@ AI_MAX_TOKENS=4000
 ```bash
 AI_CONTEXT_WINDOW=4096
 AI_MAX_TOKENS=1024
-# → leaves ~2900 tokens for input data (~11,600 characters)
+# → ~3072 tokens for input, minus ~160 overhead (system message + prompt template)
+# → leaves ~2912 tokens for config data (~11,648 characters)
 ```
 
 The system automatically calculates how much configuration data fits in the remaining prompt budget and truncates as needed. Batch processing also respects the context window when combining documents.
