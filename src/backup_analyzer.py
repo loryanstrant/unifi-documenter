@@ -122,18 +122,18 @@ class UniFiBackupAnalyzer:
                         progress_tracker.update_group(doc_type, total_batches)
                     progress_tracker.update_batch(batch_num, len(batch_files))
                     
-                    # Apply cooldown before LLM call (except for the first call)
+                    # Apply cooldown after previous LLM call, before current call (skip first call)
                     if llm_call_count > 0 and self.config.AI_COOLDOWN_SECONDS > 0:
-                        logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown after LLM call #{llm_call_count}")
+                        logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown between LLM calls")
                         time.sleep(self.config.AI_COOLDOWN_SECONDS)
                     
                     batch_results = self._process_batch(doc_type, batch_files, analysis_dir)
                     analyzed_documents.extend(batch_results)
                     llm_call_count += 1
             
-            # Apply cooldown before summary generation
+            # Apply cooldown between batch processing and summary generation
             if llm_call_count > 0 and self.config.AI_COOLDOWN_SECONDS > 0:
-                logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown after LLM call #{llm_call_count}")
+                logger.debug(f"Applying {self.config.AI_COOLDOWN_SECONDS}s cooldown before summary generation")
                 time.sleep(self.config.AI_COOLDOWN_SECONDS)
             
             # Generate summary analysis
