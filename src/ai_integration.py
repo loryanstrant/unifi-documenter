@@ -11,6 +11,30 @@ from .config import Config
 
 logger = logging.getLogger('unifi_documenter')
 
+# Patterns in error responses that indicate a transient model-loading failure
+# (e.g. VRAM/NVRAM exhaustion) which may succeed after a cooldown.
+_RETRYABLE_ERROR_PATTERNS = [
+    "failed to load model",
+    "could not load model",
+    "engine core initialization failed",
+    "out of memory",
+    "nvram",
+    "oom",
+]
+
+
+def _is_retryable_error(error_text: str) -> bool:
+    """Return True if *error_text* looks like a transient model-loading failure."""
+    lower = error_text.lower()
+    return any(p in lower for p in _RETRYABLE_ERROR_PATTERNS)
+
+
+class RetryableAIError(Exception):
+    """Raised when an AI API call fails with a transient error that may
+    succeed if retried after a cooldown (e.g. model failed to load due
+    to insufficient VRAM)."""
+
+
 class AIProvider(ABC):
     """Abstract base class for AI providers"""
     
@@ -65,10 +89,13 @@ class OpenAIProvider(AIProvider):
             return response.choices[0].message.content
             
         except Exception as e:
-            logger.error(f"OpenAI API error: {str(e)}")
+            error_str = str(e)
+            logger.error(f"OpenAI API error: {error_str}")
             logger.error(f"API URL: {self.api_url}")
             logger.error(f"Model: {self.model}")
             logger.error(f"Error type: {type(e).__name__}")
+            if _is_retryable_error(error_str):
+                raise RetryableAIError(error_str) from e
             return None
     
     def is_available(self) -> bool:
@@ -121,11 +148,14 @@ class AzureOpenAIProvider(AIProvider):
             return response.choices[0].message.content
             
         except Exception as e:
-            logger.error(f"Azure OpenAI API error: {str(e)}")
+            error_str = str(e)
+            logger.error(f"Azure OpenAI API error: {error_str}")
             logger.error(f"Azure Endpoint: {self.endpoint}")
             logger.error(f"Deployment: {self.deployment}")
             logger.error(f"API Version: {self.api_version}")
             logger.error(f"Error type: {type(e).__name__}")
+            if _is_retryable_error(error_str):
+                raise RetryableAIError(error_str) from e
             return None
     
     def is_available(self) -> bool:
@@ -174,13 +204,20 @@ class OllamaProvider(AIProvider):
                 logger.error(f"Ollama URL: {self.url}/api/generate")
                 logger.error(f"Model: {self.model}")
                 logger.error(f"Response: {response.text}")
+                if response.status_code == 500 and _is_retryable_error(response.text):
+                    raise RetryableAIError(response.text)
                 return None
                 
+        except RetryableAIError:
+            raise
         except Exception as e:
-            logger.error(f"Ollama API error: {str(e)}")
+            error_str = str(e)
+            logger.error(f"Ollama API error: {error_str}")
             logger.error(f"Ollama URL: {self.url}")
             logger.error(f"Model: {self.model}")
             logger.error(f"Error type: {type(e).__name__}")
+            if _is_retryable_error(error_str):
+                raise RetryableAIError(error_str) from e
             return None
     
     def is_available(self) -> bool:
@@ -247,13 +284,20 @@ class CustomProvider(AIProvider):
                 logger.error(f"API URL: {self.api_url}/chat/completions")
                 logger.error(f"Model: {self.model}")
                 logger.error(f"Response: {response.text}")
+                if response.status_code == 500 and _is_retryable_error(response.text):
+                    raise RetryableAIError(response.text)
                 return None
                 
+        except RetryableAIError:
+            raise
         except Exception as e:
-            logger.error(f"Custom API error: {str(e)}")
+            error_str = str(e)
+            logger.error(f"Custom API error: {error_str}")
             logger.error(f"API URL: {self.api_url}")
             logger.error(f"Model: {self.model}")
             logger.error(f"Error type: {type(e).__name__}")
+            if _is_retryable_error(error_str):
+                raise RetryableAIError(error_str) from e
             return None
     
     def is_available(self) -> bool:
@@ -368,6 +412,8 @@ class AIManager:
             prompt = self._create_documentation_prompt(data_str, context)
             return self.provider.generate_completion(prompt, max_tokens=max_completion_tokens)
             
+        except RetryableAIError:
+            raise
         except Exception as e:
             logger.error(f"Documentation generation failed: {str(e)}")
             return None
