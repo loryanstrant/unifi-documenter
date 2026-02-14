@@ -30,7 +30,7 @@ class EmbeddingProvider:
         """Truncate text to fit within the embedding model's context window.
 
         Uses a conservative estimate of 2 characters per token to safely
-        handle structured data (JSON, config files) which tokenises more
+        handle structured data (JSON, config files) which tokenizes more
         densely than natural language.  A 5% safety margin is applied on
         top of that.
         """
