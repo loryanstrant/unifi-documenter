@@ -29,10 +29,12 @@ class EmbeddingProvider:
     def _truncate_text(self, text: str) -> str:
         """Truncate text to fit within the embedding model's context window.
 
-        Uses a rough estimate of 4 characters per token and leaves a 5%
-        safety margin to avoid exceeding the limit.
+        Uses a conservative estimate of 2 characters per token to safely
+        handle structured data (JSON, config files) which tokenises more
+        densely than natural language.  A 5% safety margin is applied on
+        top of that.
         """
-        chars_per_token = 4
+        chars_per_token = 2
         # Use 95% of the context window as a safety margin
         max_tokens = int(self.context_window * 0.95)
         max_chars = max_tokens * chars_per_token
@@ -123,7 +125,13 @@ class EmbeddingProvider:
             if response.status_code == 500:
                 # Check for common patterns indicating missing/unsupported model
                 error_text = response.text.lower()
-                if "not implemented" in error_text or "unimplemented" in error_text:
+                if "exceeds" in error_text and "context" in error_text:
+                    logger.error("⚠️  TROUBLESHOOTING: Text exceeds the embedding model's context window")
+                    logger.error(f"   - The text was too long for model '{self.model}'")
+                    logger.error(f"   - Current EMBEDDING_CONTEXT_WINDOW={self.context_window}")
+                    logger.error("   - Try reducing document sizes or lowering EMBEDDING_CONTEXT_WINDOW")
+                    logger.error("   - If your model supports a larger context, increase context_size in the model config")
+                elif "not implemented" in error_text or "unimplemented" in error_text:
                     logger.error("⚠️  TROUBLESHOOTING: 'Method not implemented' or 'Unimplemented' error")
                     logger.error("   This usually means:")
                     logger.error(f"   1. The embedding model '{self.model}' is not loaded in your AI provider")
