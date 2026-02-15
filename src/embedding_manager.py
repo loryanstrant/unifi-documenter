@@ -25,23 +25,32 @@ class EmbeddingProvider:
         self.provider = config.EMBEDDING_PROVIDER.lower()
         self.model = config.EMBEDDING_MODEL
         self.context_window = config.EMBEDDING_CONTEXT_WINDOW
+        self.chars_per_token = config.EMBEDDING_CHARS_PER_TOKEN
 
     def _truncate_text(self, text: str) -> str:
         """Truncate text to fit within the embedding model's context window.
 
-        Uses a conservative estimate of 2 characters per token to safely
-        handle structured data (JSON, config files) which tokenizes more
-        densely than natural language.  A 5% safety margin is applied on
-        top of that.
+        Uses a configurable character-to-token estimate for structured data
+        (JSON, config files) which tokenizes more densely than natural language
+        due to special characters, brackets, quotes, etc. Limits to 85% of the
+        context window to provide a 15% safety buffer.
+        
+        Note: Different tokenizers may count tokens differently. The default
+        estimate (1.0 chars/token) ensures compatibility with most embedding
+        models. For qwen3 and similar models, JSON data can tokenize at
+        ~1 char per token or worse. This can be adjusted via the
+        EMBEDDING_CHARS_PER_TOKEN configuration parameter if needed.
         """
-        chars_per_token = 2
-        # Use 95% of the context window as a safety margin
-        max_tokens = int(self.context_window * 0.95)
-        max_chars = max_tokens * chars_per_token
+        # Use configured chars-per-token ratio (default 1.0 for worst-case JSON)
+        # Limit to 85% of context window to provide 15% safety buffer
+        max_tokens = int(self.context_window * 0.85)
+        max_chars = int(max_tokens * float(self.chars_per_token))
+        
         if len(text) > max_chars:
-            logger.debug(
+            logger.info(
                 f"Truncating embedding text from {len(text)} to {max_chars} chars "
-                f"(context_window={self.context_window} tokens)"
+                f"(target: {max_tokens} tokens, context_window={self.context_window}, "
+                f"chars_per_token={self.chars_per_token})"
             )
             text = text[:max_chars]
         return text
