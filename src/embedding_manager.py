@@ -29,19 +29,20 @@ class EmbeddingProvider:
     def _truncate_text(self, text: str) -> str:
         """Truncate text to fit within the embedding model's context window.
 
-        Uses a conservative estimate of 2 characters per token to safely
+        Uses a very conservative estimate of 1.5 characters per token to safely
         handle structured data (JSON, config files) which tokenizes more
-        densely than natural language.  A 5% safety margin is applied on
-        top of that.
+        densely than natural language due to special characters, brackets,
+        quotes, etc. A 10% safety margin is applied on top of that.
         """
-        chars_per_token = 2
-        # Use 95% of the context window as a safety margin
-        max_tokens = int(self.context_window * 0.95)
-        max_chars = max_tokens * chars_per_token
+        # JSON/structured data tokenizes densely - use conservative estimate
+        chars_per_token = 1.5
+        # Use 90% of the context window as a safety margin
+        max_tokens = int(self.context_window * 0.90)
+        max_chars = int(max_tokens * chars_per_token)
         if len(text) > max_chars:
             logger.debug(
                 f"Truncating embedding text from {len(text)} to {max_chars} chars "
-                f"(context_window={self.context_window} tokens)"
+                f"(estimated {max_tokens} tokens, context_window={self.context_window})"
             )
             text = text[:max_chars]
         return text
