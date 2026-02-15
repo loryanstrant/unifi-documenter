@@ -3,12 +3,14 @@ Web server for UniFi Documenter - provides real-time progress tracking and resul
 """
 import os
 import json
+import re
 import logging
 from datetime import datetime
 import pytz
 from pathlib import Path
 from typing import Dict, List, Optional
-from flask import Flask, render_template, jsonify, send_from_directory
+from flask import Flask, render_template, jsonify, send_from_directory, abort
+from werkzeug.security import safe_join
 from threading import Lock
 
 from .config import Config
@@ -23,6 +25,29 @@ def _get_now_tz(config):
         return datetime.now(tz)
     except:
         return datetime.now()
+
+
+def _get_display_name(filename: str) -> str:
+    """Convert a filename like 'batch_users_2026-02-15T13-45-32-698994.md' to a human-readable name."""
+    name = filename
+    # Remove extension
+    name = re.sub(r'\.(html|md)$', '', name)
+    # Handle known special files
+    if name == 'SUMMARY':
+        return '📊 Summary Analysis'
+    if name == 'INDEX':
+        return '📑 Documentation Index'
+    # Handle batch files: batch_<type>_<timestamp>
+    match = re.match(r'^batch_([a-zA-Z]+(?:_[a-zA-Z]+)*)_(\d.+)$', name)
+    if match:
+        doc_type = match.group(1).replace('_', ' ').title()
+        return f'📄 {doc_type} Configuration Batch'
+    # Handle doc files: doc_<hash>
+    match = re.match(r'^doc_([a-f0-9]+)$', name)
+    if match:
+        return f'📄 Document {match.group(1)}'
+    # Fallback: clean up the name
+    return f'📄 {name.replace("_", " ").title()}'
 
 
 class ProgressTracker:
@@ -137,6 +162,7 @@ def create_app(config: Config) -> Flask:
         
         # Get output files if job is completed
         files = []
+        summary_content = None
         if job['status'] == 'completed' and job.get('output_dir'):
             analysis_dir = os.path.join(job['output_dir'], 'analysis')
             if os.path.exists(analysis_dir):
@@ -145,11 +171,20 @@ def create_app(config: Config) -> Flask:
                         file_path = os.path.join(analysis_dir, file)
                         files.append({
                             'name': file,
+                            'display_name': _get_display_name(file),
                             'size': os.path.getsize(file_path),
                             'modified': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
                         })
+                # Read summary file if it exists
+                summary_path = os.path.join(analysis_dir, 'SUMMARY.md')
+                if os.path.exists(summary_path):
+                    try:
+                        with open(summary_path, 'r', encoding='utf-8') as f:
+                            summary_content = f.read()
+                    except Exception as e:
+                        logger.warning(f"Failed to read summary file: {e}")
         
-        return render_template('job_details.html', job=job, files=files)
+        return render_template('job_details.html', job=job, files=files, summary_content=summary_content)
     
     @app.route('/api/job/<job_id>')
     def get_job_api(job_id):
@@ -180,13 +215,35 @@ def create_app(config: Config) -> Flask:
     
     @app.route('/view/<job_id>/<filename>')
     def view_file(job_id, filename):
-        """View analysis file"""
+        """View analysis file - renders markdown in the browser"""
         jobs = progress_tracker.get_jobs_history()
         job = next((j for j in jobs if j['id'] == job_id), None)
         if not job or not job.get('output_dir'):
             return "Job not found", 404
         
         analysis_dir = os.path.join(job['output_dir'], 'analysis')
+        file_path = safe_join(analysis_dir, filename)
+        if file_path is None:
+            abort(400)
+        
+        if not os.path.isfile(file_path):
+            return "File not found", 404
+        
+        # Render markdown files in the browser instead of downloading
+        if filename.endswith('.md'):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                display_name = _get_display_name(filename)
+                return render_template('markdown_view.html',
+                                       content=content,
+                                       filename=filename,
+                                       display_name=display_name,
+                                       job=job)
+            except Exception as e:
+                logger.warning(f"Failed to render markdown file: {e}")
+                return send_from_directory(analysis_dir, filename)
+        
         return send_from_directory(analysis_dir, filename)
     
     @app.route('/download/<job_id>/<filename>')

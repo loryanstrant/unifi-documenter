@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ display_name }} - UniFi Documenter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #333;
+            font-size: 1.5em;
+        }
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .nav-link {
+            color: #4a9eff;
+            text-decoration: none;
+        }
+        .nav-link:hover {
+            text-decoration: underline;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .markdown-body {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            line-height: 1.7;
+            color: #333;
+        }
+        .markdown-body h1 {
+            color: #667eea;
+            font-size: 2em;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .markdown-body h2 {
+            color: #667eea;
+            font-size: 1.5em;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .markdown-body h3 {
+            color: #764ba2;
+            font-size: 1.25em;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .markdown-body p {
+            margin-bottom: 15px;
+        }
+        .markdown-body ul, .markdown-body ol {
+            margin-left: 30px;
+            margin-bottom: 15px;
+        }
+        .markdown-body li {
+            margin-bottom: 5px;
+        }
+        .markdown-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .markdown-body th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        .markdown-body td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .markdown-body tr:hover {
+            background: #f9f9f9;
+        }
+        .markdown-body code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .markdown-body pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        .markdown-body pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        .markdown-body hr {
+            border: none;
+            border-top: 1px solid #e0e0e0;
+            margin: 20px 0;
+        }
+        .markdown-body strong {
+            color: #333;
+        }
+        .markdown-body blockquote {
+            border-left: 4px solid #667eea;
+            padding: 10px 20px;
+            margin: 15px 0;
+            background: #f8f9fa;
+            border-radius: 0 5px 5px 0;
+        }
+        .meta-line {
+            color: #666;
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>{{ display_name }}</h1>
+                <span class="meta-line">{{ filename }}</span>
+            </div>
+            <div class="header-actions">
+                <a href="/job/{{ job.id }}" class="nav-link">← Back to Job</a>
+                <a href="/download/{{ job.id }}/{{ filename }}" class="btn btn-secondary">⬇ Download</a>
+            </div>
+        </div>
+
+        <div class="markdown-body" id="markdown-content"></div>
+    </div>
+
+    <script>
+        // Simple markdown to HTML renderer
+        function renderMarkdown(text) {
+            // Escape HTML first for safety
+            let html = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+
+            // Frontmatter (remove YAML frontmatter)
+            html = html.replace(/^---[\s\S]*?---\n*/m, '');
+
+            // Code blocks (fenced) - must be before other inline processing
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+                return '<pre><code>' + code.trimEnd() + '</code></pre>';
+            });
+
+            // Headers
+            html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+            // Horizontal rules
+            html = html.replace(/^---$/gm, '<hr>');
+            html = html.replace(/^\*\*\*$/gm, '<hr>');
+
+            // Bold and italic
+            html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+            // Inline code
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Tables
+            html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)/gm, function(match, headerLine, sepLine, bodyLines) {
+                let headers = headerLine.split('|').filter(c => c.trim());
+                let rows = bodyLines.trim().split('\n');
+                let table = '<table><thead><tr>';
+                headers.forEach(h => table += '<th>' + h.trim() + '</th>');
+                table += '</tr></thead><tbody>';
+                rows.forEach(row => {
+                    let cols = row.split('|').filter(c => c.trim());
+                    table += '<tr>';
+                    cols.forEach(c => table += '<td>' + c.trim() + '</td>');
+                    table += '</tr>';
+                });
+                table += '</tbody></table>';
+                return table;
+            });
+
+            // Blockquotes
+            html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+            // Ordered lists - process first, use a distinct tag to avoid mixing with unordered
+            html = html.replace(/^(\d+)\. (.+)$/gm, '<oli>$2</oli>');
+            html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, function(match) {
+                return '<ol>' + match.replace(/<\/?oli>/g, function(t) { return t.replace('oli', 'li'); }) + '</ol>';
+            });
+
+            // Unordered lists
+            html = html.replace(/^[\s]*[-*] (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+            // Paragraphs - wrap remaining text lines
+            html = html.replace(/^(?!<[a-z]|$)(.+)$/gm, '<p>$1</p>');
+
+            // Clean up empty paragraphs and double breaks
+            html = html.replace(/<p>\s*<\/p>/g, '');
+            html = html.replace(/\n{3,}/g, '\n\n');
+
+            return html;
+        }
+
+        // Render the markdown content
+        const rawContent = {{ content | tojson }};
+        document.getElementById('markdown-content').innerHTML = renderMarkdown(rawContent);
+    </script>
+</body>
+</html>
