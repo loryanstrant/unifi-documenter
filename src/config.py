@@ -40,6 +40,7 @@ class Config:
     EMBEDDING_PROVIDER = os.getenv('EMBEDDING_PROVIDER', 'ollama')  # ollama, openai, custom
     EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'nomic-embed-text')
     EMBEDDING_CONTEXT_WINDOW = int(os.getenv('EMBEDDING_CONTEXT_WINDOW', '8192'))  # Max token context for embedding model
+    EMBEDDING_CHARS_PER_TOKEN = float(os.getenv('EMBEDDING_CHARS_PER_TOKEN', '1.0'))  # Chars per token estimate for truncation (1.0 is worst-case for JSON)
     QDRANT_URL = os.getenv('QDRANT_URL', 'http://localhost:6333')
     EMBEDDING_COLLECTION = os.getenv('EMBEDDING_COLLECTION', 'unifi_configs')
     EMBEDDING_TOP_K = int(os.getenv('EMBEDDING_TOP_K', '5'))

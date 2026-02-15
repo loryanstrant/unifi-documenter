@@ -25,29 +25,32 @@ class EmbeddingProvider:
         self.provider = config.EMBEDDING_PROVIDER.lower()
         self.model = config.EMBEDDING_MODEL
         self.context_window = config.EMBEDDING_CONTEXT_WINDOW
+        self.chars_per_token = config.EMBEDDING_CHARS_PER_TOKEN
 
     def _truncate_text(self, text: str) -> str:
         """Truncate text to fit within the embedding model's context window.
 
-        Uses a very conservative estimate for structured data (JSON, config files)
-        which tokenizes more densely than natural language due to special characters,
-        brackets, quotes, etc. A 15% safety margin is applied on top of that.
+        Uses a configurable character-to-token estimate for structured data
+        (JSON, config files) which tokenizes more densely than natural language
+        due to special characters, brackets, quotes, etc. A 15% safety margin
+        is applied on top of that.
         
-        Note: Different tokenizers may count tokens differently. This conservative
-        estimate ensures compatibility with most embedding models. For qwen3 and
-        similar models, JSON data can tokenize at ~1 char per token or worse.
+        Note: Different tokenizers may count tokens differently. The default
+        estimate (1.0 chars/token) ensures compatibility with most embedding
+        models. For qwen3 and similar models, JSON data can tokenize at
+        ~1 char per token or worse. This can be adjusted via the
+        EMBEDDING_CHARS_PER_TOKEN configuration parameter if needed.
         """
-        # JSON/structured data tokenizes very densely - use very conservative estimate
-        # Based on observed errors where documents exceeded 8192 token limit
-        # Use 1.0 chars/token as worst-case for heavily structured JSON data
-        chars_per_token = 1.0
-        # Use 85% of the context window as a safety margin
+        # Use configured chars-per-token ratio (default 1.0 for worst-case JSON)
+        # Apply 85% safety margin to ensure we stay well within context window
         max_tokens = int(self.context_window * 0.85)
-        max_chars = int(max_tokens * chars_per_token)
+        max_chars = int(max_tokens * self.chars_per_token)
+        
         if len(text) > max_chars:
             logger.info(
                 f"Truncating embedding text from {len(text)} to {max_chars} chars "
-                f"(target: {max_tokens} tokens, context_window={self.context_window})"
+                f"(target: {max_tokens} tokens, context_window={self.context_window}, "
+                f"chars_per_token={self.chars_per_token})"
             )
             text = text[:max_chars]
         return text
