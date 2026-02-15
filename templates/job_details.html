@@ -36,6 +36,52 @@
         .nav-link:hover {
             text-decoration: underline;
         }
+        .summary-card {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+        .summary-card h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .summary-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .summary-preview {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: #333;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .summary-preview h1, .summary-preview h2, .summary-preview h3 {
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+        .summary-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        .summary-preview th {
+            background: #667eea;
+            color: white;
+            padding: 8px;
+            text-align: left;
+        }
+        .summary-preview td {
+            padding: 8px;
+            border-bottom: 1px solid #e0e0e0;
+        }
         .job-info {
             background: white;
             padding: 20px 30px;
@@ -96,9 +142,15 @@
         .file-info {
             flex: 1;
         }
-        .file-name {
+        .file-display-name {
             font-weight: 600;
             color: #333;
+            margin-bottom: 3px;
+        }
+        .file-name {
+            font-size: 0.8em;
+            color: #888;
+            font-family: 'Courier New', monospace;
             margin-bottom: 5px;
         }
         .file-meta {
@@ -132,6 +184,13 @@
         .btn-secondary:hover {
             background: #5a6268;
         }
+        .btn-summary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-summary:hover {
+            background: #5568d3;
+        }
         .status-badge {
             display: inline-block;
             padding: 5px 12px;
@@ -164,6 +223,17 @@
             <h1>Job {{ job.id }} Details</h1>
             <a href="/" class="nav-link">← Back to Dashboard</a>
         </div>
+
+        {% if summary_content %}
+        <div class="summary-card">
+            <h2>📊 Summary Analysis</h2>
+            <div class="summary-actions">
+                <a href="/view/{{ job.id }}/SUMMARY.md" class="btn btn-summary">View Full Summary</a>
+                <a href="/download/{{ job.id }}/SUMMARY.md" class="btn btn-secondary">⬇ Download</a>
+            </div>
+            <div class="summary-preview" id="summary-preview"></div>
+        </div>
+        {% endif %}
 
         <div class="job-info">
             <h2>Job Information</h2>
@@ -202,7 +272,8 @@
                     {% for file in files %}
                     <div class="file-card">
                         <div class="file-info">
-                            <div class="file-name">📄 {{ file.name }}</div>
+                            <div class="file-display-name">{{ file.display_name }}</div>
+                            <div class="file-name">{{ file.name }}</div>
                             <div class="file-meta">
                                 Size: {{ "%.2f"|format(file.size / 1024) }} KB | 
                                 Modified: {{ file.modified }}
@@ -226,5 +297,48 @@
             {% endif %}
         </div>
     </div>
+
+    {% if summary_content %}
+    <script>
+        // Simple markdown to HTML renderer for summary preview
+        function renderMarkdown(text) {
+            let html = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            html = html.replace(/^---[\s\S]*?---\n*/m, '');
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+            html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+            html = html.replace(/^---$/gm, '<hr>');
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)/gm, function(match, hdr, sep, body) {
+                let hs = hdr.split('|').filter(c => c.trim());
+                let rs = body.trim().split('\n');
+                let t = '<table><thead><tr>';
+                hs.forEach(h => t += '<th>' + h.trim() + '</th>');
+                t += '</tr></thead><tbody>';
+                rs.forEach(r => {
+                    let cs = r.split('|').filter(c => c.trim());
+                    t += '<tr>';
+                    cs.forEach(c => t += '<td>' + c.trim() + '</td>');
+                    t += '</tr>';
+                });
+                return t + '</tbody></table>';
+            });
+            html = html.replace(/^[\s]*[-*] (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+            html = html.replace(/^(?!<[a-z]|$)(.+)$/gm, '<p>$1</p>');
+            html = html.replace(/<p>\s*<\/p>/g, '');
+            return html;
+        }
+        const summaryContent = {{ summary_content | tojson }};
+        document.getElementById('summary-preview').innerHTML = renderMarkdown(summaryContent);
+    </script>
+    {% endif %}
 </body>
 </html>

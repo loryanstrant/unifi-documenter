@@ -397,7 +397,8 @@ class UniFiBackupAnalyzer:
             # Save batch documentation
             timestamp = datetime.now().isoformat()
             timestamp_safe = timestamp.replace(':', '-').replace('.', '-')
-            batch_filename = f"batch_{doc_type}_{timestamp_safe}.html"
+            file_ext = '.html' if self.config.OUTPUT_FORMAT.lower() == 'html' else '.md'
+            batch_filename = f"batch_{doc_type}_{timestamp_safe}{file_ext}"
             batch_path = os.path.join(output_dir, batch_filename)
             
             # Convert documentation to HTML if needed
