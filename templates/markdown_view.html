@@ -229,12 +229,15 @@
             // Blockquotes
             html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
+            // Ordered lists - process first, use a distinct tag to avoid mixing with unordered
+            html = html.replace(/^(\d+)\. (.+)$/gm, '<oli>$2</oli>');
+            html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, function(match) {
+                return '<ol>' + match.replace(/<\/?oli>/g, function(t) { return t.replace('oli', 'li'); }) + '</ol>';
+            });
+
             // Unordered lists
             html = html.replace(/^[\s]*[-*] (.+)$/gm, '<li>$1</li>');
             html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
-
-            // Ordered lists
-            html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
             // Paragraphs - wrap remaining text lines
             html = html.replace(/^(?!<[a-z]|$)(.+)$/gm, '<p>$1</p>');

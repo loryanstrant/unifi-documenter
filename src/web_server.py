@@ -220,11 +220,11 @@ def create_app(config: Config) -> Flask:
         if not job or not job.get('output_dir'):
             return "Job not found", 404
         
-        analysis_dir = os.path.join(job['output_dir'], 'analysis')
+        analysis_dir = os.path.realpath(os.path.join(job['output_dir'], 'analysis'))
         file_path = os.path.realpath(os.path.join(analysis_dir, filename))
         
         # Prevent path traversal
-        if not file_path.startswith(os.path.realpath(analysis_dir)):
+        if not file_path.startswith(analysis_dir + os.sep) and file_path != analysis_dir:
             return "Invalid filename", 400
         
         if not os.path.exists(file_path):

@@ -307,7 +307,9 @@
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
             html = html.replace(/^---[\s\S]*?---\n*/m, '');
-            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+            html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+                return '<pre><code>' + code.trimEnd() + '</code></pre>';
+            });
             html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
             html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
@@ -329,6 +331,10 @@
                     t += '</tr>';
                 });
                 return t + '</tbody></table>';
+            });
+            html = html.replace(/^(\d+)\. (.+)$/gm, '<oli>$2</oli>');
+            html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, function(match) {
+                return '<ol>' + match.replace(/<\/?oli>/g, function(t) { return t.replace('oli', 'li'); }) + '</ol>';
             });
             html = html.replace(/^[\s]*[-*] (.+)$/gm, '<li>$1</li>');
             html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
