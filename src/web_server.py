@@ -9,7 +9,8 @@ from datetime import datetime
 import pytz
 from pathlib import Path
 from typing import Dict, List, Optional
-from flask import Flask, render_template, jsonify, send_from_directory
+from flask import Flask, render_template, jsonify, send_from_directory, abort
+from werkzeug.security import safe_join
 from threading import Lock
 
 from .config import Config
@@ -37,7 +38,7 @@ def _get_display_name(filename: str) -> str:
     if name == 'INDEX':
         return '📑 Documentation Index'
     # Handle batch files: batch_<type>_<timestamp>
-    match = re.match(r'^batch_([a-zA-Z_]+)_(.+)$', name)
+    match = re.match(r'^batch_([a-zA-Z]+(?:_[a-zA-Z]+)*)_(\d.+)$', name)
     if match:
         doc_type = match.group(1).replace('_', ' ').title()
         return f'📄 {doc_type} Configuration Batch'
@@ -220,14 +221,12 @@ def create_app(config: Config) -> Flask:
         if not job or not job.get('output_dir'):
             return "Job not found", 404
         
-        analysis_dir = os.path.realpath(os.path.join(job['output_dir'], 'analysis'))
-        file_path = os.path.realpath(os.path.join(analysis_dir, filename))
+        analysis_dir = os.path.join(job['output_dir'], 'analysis')
+        file_path = safe_join(analysis_dir, filename)
+        if file_path is None:
+            abort(400)
         
-        # Prevent path traversal
-        if not file_path.startswith(analysis_dir + os.sep) and file_path != analysis_dir:
-            return "Invalid filename", 400
-        
-        if not os.path.exists(file_path):
+        if not os.path.isfile(file_path):
             return "File not found", 404
         
         # Render markdown files in the browser instead of downloading
