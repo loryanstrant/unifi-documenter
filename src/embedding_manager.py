@@ -32,8 +32,8 @@ class EmbeddingProvider:
 
         Uses a configurable character-to-token estimate for structured data
         (JSON, config files) which tokenizes more densely than natural language
-        due to special characters, brackets, quotes, etc. A 15% safety margin
-        is applied on top of that.
+        due to special characters, brackets, quotes, etc. Limits to 85% of the
+        context window to provide a 15% safety buffer.
         
         Note: Different tokenizers may count tokens differently. The default
         estimate (1.0 chars/token) ensures compatibility with most embedding
@@ -42,9 +42,9 @@ class EmbeddingProvider:
         EMBEDDING_CHARS_PER_TOKEN configuration parameter if needed.
         """
         # Use configured chars-per-token ratio (default 1.0 for worst-case JSON)
-        # Apply 85% safety margin to ensure we stay well within context window
+        # Limit to 85% of context window to provide 15% safety buffer
         max_tokens = int(self.context_window * 0.85)
-        max_chars = int(max_tokens * self.chars_per_token)
+        max_chars = int(max_tokens * float(self.chars_per_token))
         
         if len(text) > max_chars:
             logger.info(
